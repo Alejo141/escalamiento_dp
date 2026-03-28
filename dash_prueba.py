@@ -28,7 +28,7 @@ st.set_page_config(
 # CONSTANTES
 # ─────────────────────────────────────────────
 
-RUTA_ARCHIVO    = r"C:\Users\USUARIO\OneDrive - SUNCOLOMBIA SAS (1)\1. Escalamiento\Consolidado_Informacion_pruebas.xlsx"
+RUTA_ARCHIVO    = "https://suncompanycol-my.sharepoint.com/personal/sac_dispower_co/_layouts/15/download.aspx?share=IQD470ahen_KQa7HKVzXNh_EAa_2TzrHt1M9hOShRFYbwaM&e=mDU1fU"
 SHEET_ABIERTOS  = "Consolidado"
 SHEET_CERRADOS  = "Gestion_SAC"
 
