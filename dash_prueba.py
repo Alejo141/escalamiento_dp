@@ -388,14 +388,21 @@ if dashboard == "🛠️ Gestionar":
     )
     registro = df_abiertos.loc[index_sel]
 
+    # Lista de responsables únicos de Consolidado
+    responsables_lista = sorted(df_abiertos["Responsable"].dropna().unique().tolist())
+
     with st.form("form_edicion"):
         # Campos de solo lectura (informativos)
-        col1, col2, col3 = st.columns(3)
-        col1.text_input("NUI",         registro.get("NUI", ""),         disabled=True)
-        col2.text_input("Responsable", registro.get("Responsable", ""), disabled=True)
-        col3.text_input("Semáforo",    str(registro.get("Semaforo", "")), disabled=True)
+        col1, col2 = st.columns(2)
+        col1.text_input("NUI",      registro.get("NUI", ""),            disabled=True)
+        col2.text_input("Semáforo", str(registro.get("Semaforo", "")),  disabled=True)
 
-        # Único campo editable
+        # Responsable: lista desplegable con los existentes en Consolidado
+        responsable_actual = registro.get("Responsable", "")
+        idx_resp = responsables_lista.index(responsable_actual) if responsable_actual in responsables_lista else 0
+        nuevo_responsable = st.selectbox("Responsable", responsables_lista, index=idx_resp)
+
+        # Descripción editable
         nueva_descripcion = st.text_area("Descripción", registro.get("Descripción", ""), height=120)
 
         col_a, col_b, _  = st.columns([1, 1, 3])
@@ -403,6 +410,7 @@ if dashboard == "🛠️ Gestionar":
         eliminar = col_b.form_submit_button("🗑️ Eliminar registro", type="secondary")
 
     if guardar:
+        df_abiertos.loc[index_sel, "Responsable"] = nuevo_responsable
         df_abiertos.loc[index_sel, "Descripción"] = nueva_descripcion
         try:
             with st.spinner("Guardando en OneDrive…"):
