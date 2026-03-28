@@ -34,6 +34,14 @@ BINS_SEMAFORO       = [-999, 5, 10, 999]
 LABELS_SEMAFORO     = ["🟢 En tiempo", "🟡 En riesgo", "🔴 Vencido"]
 COLUMNAS_REQUERIDAS = ["FechaCreacion", "Responsable", "NombreSeccionales", "NUI"]
 
+# Paleta ampliada — usada en todos los gráficos de categorías
+PALETA = [
+    "#8f5cda","#7069d8","#3a81d5","#38a9d2","#4cb2ca",
+    "#a78bfa","#60a5fa","#34d399","#f472b6","#fb923c",
+    "#facc15","#e879f9","#2dd4bf","#818cf8","#f87171",
+    "#4ade80","#38bdf8","#c084fc","#fb7185","#a3e635",
+]
+
 # Columnas visibles en las tablas del dashboard (en orden)
 COLUMNAS_TABLA = [
     "NUI", "NombreSeccionales", "Id_Tickets", "Semaforo",
@@ -227,19 +235,20 @@ def mostrar_login_sidebar() -> None:
                 st.session_state.pop("usuario", None)
                 st.rerun()
         else:
-            st.markdown("### 🔐 Acceso Admin")
-            with st.form("form_login", clear_on_submit=True):
-                usr = st.text_input("Usuario")
-                pwd = st.text_input("Contraseña", type="password")
-                ok  = st.form_submit_button("Iniciar sesión", use_container_width=True)
-            if ok:
-                rol = verificar_credenciales(usr, pwd)
-                if rol:
-                    st.session_state["rol"]     = rol
-                    st.session_state["usuario"] = usr
-                    st.rerun()
-                else:
-                    st.error("Usuario o contraseña incorrectos.")
+            # Login oculto — se despliega al hacer clic en la flecha
+            with st.expander("🔐 ›", expanded=False):
+                with st.form("form_login", clear_on_submit=True):
+                    usr = st.text_input("Usuario")
+                    pwd = st.text_input("Contraseña", type="password")
+                    ok  = st.form_submit_button("Iniciar sesión", use_container_width=True)
+                if ok:
+                    rol = verificar_credenciales(usr, pwd)
+                    if rol:
+                        st.session_state["rol"]     = rol
+                        st.session_state["usuario"] = usr
+                        st.rerun()
+                    else:
+                        st.error("Usuario o contraseña incorrectos.")
 
 # ─────────────────────────────────────────────
 # UTILIDADES
@@ -517,15 +526,18 @@ st.download_button(
 
 st.divider()
 
-# Gráficos fila 1
+LAYOUT = dict(plot_bgcolor="#161a24", paper_bgcolor="#161a24", margin=dict(l=0,r=0,t=30,b=0),
+              legend=dict(bgcolor="rgba(0,0,0,0)", font_color="#d1d5db"),
+              font=dict(color="#d1d5db"))
+
+# ── FILA 1: Seccional + Semáforo ──
 col_g1, col_g2 = st.columns([2, 1])
 with col_g1:
     st.subheader("📊 Tickets por Seccional")
     df_sec = df.groupby("NombreSeccionales").size().reset_index(name="Tickets").sort_values("Tickets", ascending=True)
     fig_bar = px.bar(df_sec, x="Tickets", y="NombreSeccionales", orientation="h",
-                     color="Tickets", color_continuous_scale=["#3a81d5","#8f5cda"], template="plotly_dark")
-    fig_bar.update_layout(plot_bgcolor="#161a24", paper_bgcolor="#161a24",
-                          coloraxis_showscale=False, margin=dict(l=0,r=0,t=10,b=0), yaxis_title=None)
+                     color="NombreSeccionales", color_discrete_sequence=PALETA, template="plotly_dark")
+    fig_bar.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
     st.plotly_chart(fig_bar, use_container_width=True)
 
 with col_g2:
@@ -534,12 +546,11 @@ with col_g2:
     df_sem.columns = ["Estado","Cantidad"]
     fig_pie = px.pie(df_sem, names="Estado", values="Cantidad", hole=0.55, template="plotly_dark",
                      color="Estado", color_discrete_map={"🟢 En tiempo":"#4ade80","🟡 En riesgo":"#facc15","🔴 Vencido":"#f87171"})
-    fig_pie.update_layout(plot_bgcolor="#161a24", paper_bgcolor="#161a24",
-                          legend=dict(orientation="h", y=-0.15), margin=dict(l=0,r=0,t=10,b=0))
+    fig_pie.update_layout(**{**LAYOUT, "legend": dict(orientation="h", y=-0.15, bgcolor="rgba(0,0,0,0)", font_color="#d1d5db")})
     fig_pie.update_traces(textinfo="percent+label", textfont_size=12)
     st.plotly_chart(fig_pie, use_container_width=True)
 
-# Gráficos fila 2
+# ── FILA 2: Tendencia + Treemap ──
 col_g3, col_g4 = st.columns(2)
 with col_g3:
     st.subheader("📅 Tendencia de creación")
@@ -548,9 +559,10 @@ with col_g3:
                       .assign(Mes=lambda x: x["FechaCreacion"].dt.to_period("M").astype(str))
                       .groupby("Mes").size().reset_index(name="Tickets"))
         fig_line = px.line(df_trend, x="Mes", y="Tickets", markers=True,
-                           template="plotly_dark", color_discrete_sequence=["#8f5cda"])
-        fig_line.update_layout(plot_bgcolor="#161a24", paper_bgcolor="#161a24", margin=dict(l=0,r=0,t=10,b=0))
-        fig_line.update_traces(line_width=2.5, marker_size=7)
+                           template="plotly_dark", color_discrete_sequence=["#a78bfa"])
+        fig_line.update_layout(**LAYOUT)
+        fig_line.update_traces(line_width=2.5, marker_size=7, line_color="#a78bfa",
+                               marker=dict(color="#f472b6", size=8))
         st.plotly_chart(fig_line, use_container_width=True)
     else:
         st.info("Sin datos de fecha disponibles.")
@@ -559,17 +571,56 @@ with col_g4:
     st.subheader("🗺️ Treemap Seccional × Responsable")
     df_tree = df.groupby(["NombreSeccionales","Responsable"]).size().reset_index(name="Tickets")
     fig_tree = px.treemap(df_tree, path=["NombreSeccionales","Responsable"], values="Tickets",
-                          color="Tickets", color_continuous_scale=["#3a81d5","#8f5cda","#f87171"],
+                          color="Tickets", color_continuous_scale=["#3a81d5","#8f5cda","#f472b6"],
                           template="plotly_dark")
-    fig_tree.update_layout(paper_bgcolor="#161a24", margin=dict(l=0,r=0,t=10,b=0))
+    fig_tree.update_layout(**LAYOUT)
     st.plotly_chart(fig_tree, use_container_width=True)
 
-# Gráfico fila 3
-st.subheader("📦 Distribución de días hábiles")
-fig_hist = px.histogram(df.dropna(subset=["Dias_Habiles"]), x="Dias_Habiles", nbins=20,
-                        color_discrete_sequence=["#7069d8"], template="plotly_dark",
-                        labels={"Dias_Habiles":"Días hábiles"})
-fig_hist.add_vline(x=5,  line_dash="dash", line_color="#4ade80", annotation_text="Límite verde (5)")
-fig_hist.add_vline(x=10, line_dash="dash", line_color="#facc15", annotation_text="Límite amarillo (10)")
-fig_hist.update_layout(plot_bgcolor="#161a24", paper_bgcolor="#161a24", margin=dict(l=0,r=0,t=10,b=0))
-st.plotly_chart(fig_hist, use_container_width=True)
+# ── FILA 3: SubMenu1 + Top 10 Responsables ──
+col_g5, col_g6 = st.columns(2)
+with col_g5:
+    st.subheader("🏷️ Tickets por SubMenu1")
+    if "SubMenu1" in df.columns:
+        df_sub = (df.groupby("SubMenu1").size().reset_index(name="Tickets")
+                    .sort_values("Tickets", ascending=True))
+        fig_sub = px.bar(df_sub, x="Tickets", y="SubMenu1", orientation="h",
+                         color="SubMenu1", color_discrete_sequence=PALETA, template="plotly_dark")
+        fig_sub.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
+        st.plotly_chart(fig_sub, use_container_width=True)
+    else:
+        st.info("Columna SubMenu1 no disponible.")
+
+with col_g6:
+    st.subheader("🏆 Top 10 Responsables con más Tickets")
+    if "Responsable" in df.columns:
+        df_resp = (df.groupby("Responsable").size().reset_index(name="Tickets")
+                     .sort_values("Tickets", ascending=False).head(10)
+                     .sort_values("Tickets", ascending=True))
+        fig_resp = px.bar(df_resp, x="Tickets", y="Responsable", orientation="h",
+                          color="Responsable", color_discrete_sequence=PALETA, template="plotly_dark")
+        fig_resp.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
+        st.plotly_chart(fig_resp, use_container_width=True)
+
+# ── FILA 4: Tiempo promedio cierre por responsable + Distribución días ──
+col_g7, col_g8 = st.columns(2)
+with col_g7:
+    st.subheader("⏱️ Tiempo Promedio de Cierre por Responsable")
+    if "Responsable" in df.columns and df["Dias_Habiles"].notna().any():
+        df_cierre = (df.groupby("Responsable")["Dias_Habiles"].mean().reset_index()
+                       .rename(columns={"Dias_Habiles":"Dias para Cierre"})
+                       .sort_values("Dias para Cierre", ascending=True))
+        fig_cierre = px.bar(df_cierre, x="Dias para Cierre", y="Responsable", orientation="h",
+                            color="Responsable", color_discrete_sequence=PALETA, template="plotly_dark",
+                            labels={"Dias para Cierre":"Días promedio"})
+        fig_cierre.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
+        st.plotly_chart(fig_cierre, use_container_width=True)
+
+with col_g8:
+    st.subheader("📦 Distribución de días hábiles")
+    fig_hist = px.histogram(df.dropna(subset=["Dias_Habiles"]), x="Dias_Habiles", nbins=20,
+                            color_discrete_sequence=["#7069d8"], template="plotly_dark",
+                            labels={"Dias_Habiles":"Días hábiles"})
+    fig_hist.add_vline(x=5,  line_dash="dash", line_color="#4ade80", annotation_text="Límite verde (5)")
+    fig_hist.add_vline(x=10, line_dash="dash", line_color="#facc15", annotation_text="Límite amarillo (10)")
+    fig_hist.update_layout(**LAYOUT)
+    st.plotly_chart(fig_hist, use_container_width=True)
