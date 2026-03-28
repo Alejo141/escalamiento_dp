@@ -253,10 +253,14 @@ def calcular_dias_habiles(df: pd.DataFrame) -> pd.Series:
 
 
 def aplicar_semaforo(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Agrega Dias_Habiles y Semaforo_KPI (para métricas internas).
+    La columna Semaforo original del Excel NO se toca — se muestra tal cual en tablas.
+    """
     df = df.copy()
     df["FechaCreacion"] = pd.to_datetime(df["FechaCreacion"], errors="coerce")
     df["Dias_Habiles"]  = calcular_dias_habiles(df)
-    df["Semaforo"]      = pd.cut(df["Dias_Habiles"], bins=BINS_SEMAFORO, labels=LABELS_SEMAFORO)
+    df["Semaforo_KPI"]  = pd.cut(df["Dias_Habiles"], bins=BINS_SEMAFORO, labels=LABELS_SEMAFORO)
     return df
 
 
@@ -465,8 +469,8 @@ total     = len(df)
 secciones = df["NombreSeccionales"].nunique()
 nuis      = df["NUI"].nunique()
 prom_dias = round(df["Dias_Habiles"].mean(), 1) if not df.empty else 0
-vencidos  = (df["Semaforo"] == "🔴 Vencido").sum()
-en_riesgo = (df["Semaforo"] == "🟡 En riesgo").sum()
+vencidos  = (df["Semaforo_KPI"] == "🔴 Vencido").sum()
+en_riesgo = (df["Semaforo_KPI"] == "🟡 En riesgo").sum()
 
 k1, k2, k3, k4, k5, k6 = st.columns(6)
 k1.metric("Total Tickets", total)
@@ -489,9 +493,9 @@ cols_top  = [c for c in COLUMNAS_TABLA if c in df_tabla_top.columns]
 df_top    = df_tabla_top[cols_top] if cols_top else df_tabla_top
 st.dataframe(
     df_top.style.apply(lambda row: [
-        "background-color: #1a2e1a" if row.get("Semaforo") == "🟢 En tiempo"
-        else "background-color: #2e2a1a" if row.get("Semaforo") == "🟡 En riesgo"
-        else "background-color: #2e1a1a" if row.get("Semaforo") == "🔴 Vencido"
+        "background-color: #1a2e1a" if row.get("Semaforo_KPI") == "🟢 En tiempo"
+        else "background-color: #2e2a1a" if row.get("Semaforo_KPI") == "🟡 En riesgo"
+        else "background-color: #2e1a1a" if row.get("Semaforo_KPI") == "🔴 Vencido"
         else "" for _ in row], axis=1),
     use_container_width=True, height=380,
 )
@@ -518,7 +522,7 @@ with col_g1:
 
 with col_g2:
     st.subheader("🚦 Semáforo")
-    df_sem = df["Semaforo"].value_counts().reset_index()
+    df_sem = df["Semaforo_KPI"].value_counts().reset_index()
     df_sem.columns = ["Estado","Cantidad"]
     fig_pie = px.pie(df_sem, names="Estado", values="Cantidad", hole=0.55, template="plotly_dark",
                      color="Estado", color_discrete_map={"🟢 En tiempo":"#4ade80","🟡 En riesgo":"#facc15","🔴 Vencido":"#f87171"})
