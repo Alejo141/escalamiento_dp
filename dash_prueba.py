@@ -28,7 +28,8 @@ st.set_page_config(
 # CONSTANTES
 # ─────────────────────────────────────────────
 
-RUTA_ARCHIVO    = "https://suncompanycol-my.sharepoint.com/personal/sac_dispower_co/_layouts/15/download.aspx?share=IQD470ahen_KQa7HKVzXNh_EAa_2TzrHt1M9hOShRFYbwaM&e=mDU1fU"
+RUTA_ARCHIVO    = "https://suncompanycol-my.sharepoint.com/personal/sac_dispower_co/_layouts/15/download.aspx?share=IQCZdWeEKv2MQqzrXf_pTpc5Ac3Q-CdpYUqcrFp-JsJGfeU&e=cuWjEK"
+
 SHEET_ABIERTOS  = "Consolidado"
 SHEET_CERRADOS  = "Gestion_SAC"
 
