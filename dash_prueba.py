@@ -135,6 +135,48 @@ def _drive_url() -> str:
     return f"https://graph.microsoft.com/v1.0/me/drive/root:{file_path}:"
 
 
+# Lista fija de responsables — usada también en la normalización al cargar
+RESPONSABLES_VALIDOS_GLOBAL = [
+    "JURIDICO - JAVIER PRADA",
+    "GERALDIN",
+    "JAVIER PRADA - GERALDIN",
+    "GESTORES SOCIALES",
+    "JURIDICO",
+    "DIANA - JUAN SEBASTIAN",
+    "DIANA - GERALDIN",
+    "JAVIER PRADA",
+    "VANESSA",
+    "GERALDIN - SAC",
+    "SUI",
+    "DIANA - GERALDIN - JURIDICO",
+    "GERALDIN - JURIDICO",
+    "GERALDIN - SUI",
+]
+
+def _normalizar_col_responsable(df: pd.DataFrame) -> pd.DataFrame:
+    """Normaliza la columna Responsable al valor válido más cercano."""
+    import difflib
+    validos_upper = [r.upper() for r in RESPONSABLES_VALIDOS_GLOBAL]
+
+    def _match(valor):
+        if pd.isna(valor) or str(valor).strip() == "":
+            return valor
+        v = str(valor).strip().upper()
+        # Exacto
+        if v in validos_upper:
+            return RESPONSABLES_VALIDOS_GLOBAL[validos_upper.index(v)]
+        # Similitud
+        matches = difflib.get_close_matches(v, validos_upper, n=1, cutoff=0.4)
+        if matches:
+            return RESPONSABLES_VALIDOS_GLOBAL[validos_upper.index(matches[0])]
+        return valor  # sin match, conservar original
+
+    if "Responsable" in df.columns:
+        df = df.copy()
+        df["Responsable"] = df["Responsable"].apply(_match)
+    return df
+
+
 @st.cache_data(ttl=60, show_spinner="📥 Descargando datos desde OneDrive…")
 def cargar_datos() -> tuple[pd.DataFrame, pd.DataFrame]:
     url  = _drive_url() + "/content"
@@ -144,6 +186,9 @@ def cargar_datos() -> tuple[pd.DataFrame, pd.DataFrame]:
     df_a = pd.read_excel(buf, sheet_name=SHEET_ABIERTOS, engine="openpyxl")
     buf.seek(0)
     df_c = pd.read_excel(buf, sheet_name=SHEET_CERRADOS, engine="openpyxl")
+    # Normalizar responsables en ambas hojas
+    df_a = _normalizar_col_responsable(df_a)
+    df_c = _normalizar_col_responsable(df_c)
     return df_a, df_c
 
 
@@ -397,8 +442,7 @@ if dashboard == "🛠️ Gestionar":
     )
     registro = df_abiertos.loc[index_sel]
 
-    # Lista de responsables únicos de Consolidado
-    responsables_lista = sorted(df_abiertos["Responsable"].dropna().unique().tolist())
+    responsables_lista = RESPONSABLES_VALIDOS_GLOBAL
 
     # Opciones fijas de SubMenu1
     OPCIONES_SUBMENU1 = [
