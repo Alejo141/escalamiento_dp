@@ -34,6 +34,14 @@ BINS_SEMAFORO       = [-999, 5, 10, 999]
 LABELS_SEMAFORO     = ["🟢 En tiempo", "🟡 En riesgo", "🔴 Vencido"]
 COLUMNAS_REQUERIDAS = ["FechaCreacion", "Responsable", "NombreSeccionales", "NUI"]
 
+# Columnas visibles en las tablas del dashboard (en orden)
+COLUMNAS_TABLA = [
+    "NUI", "NombreSeccionales", "Id_Tickets", "Semaforo",
+    "Menu", "SubMenu1", "FechaCreacion", "Dias_Habiles",
+    "Creador_gestion", "Responsable", "Fecha Asignación",
+    "Descripción", "Fecha Respuesta",
+]
+
 # ─────────────────────────────────────────────
 # ESTILOS
 # ─────────────────────────────────────────────
@@ -341,7 +349,8 @@ if dashboard == "🛠️ Gestionar":
         df_edit = df_edit[df_edit["Responsable"] == f_responsable]
 
     st.markdown(f"**{len(df_edit)}** registros encontrados")
-    st.dataframe(df_edit, use_container_width=True, height=300)
+    cols_visibles = [c for c in COLUMNAS_TABLA if c in df_edit.columns]
+    st.dataframe(df_edit[cols_visibles], use_container_width=True, height=300)
 
     if df_edit.empty:
         st.info("No hay registros que coincidan.")
@@ -357,21 +366,20 @@ if dashboard == "🛠️ Gestionar":
     registro = df_abiertos.loc[index_sel]
 
     with st.form("form_edicion"):
-        col1, col2 = st.columns(2)
-        nuevo_responsable = col1.text_input("Responsable", registro.get("Responsable", ""))
-        nuevo_semaforo    = col2.selectbox(
-            "Semáforo", LABELS_SEMAFORO,
-            index=LABELS_SEMAFORO.index(registro["Semaforo"])
-                  if registro.get("Semaforo") in LABELS_SEMAFORO else 0,
-        )
+        # Campos de solo lectura (informativos)
+        col1, col2, col3 = st.columns(3)
+        col1.text_input("NUI",         registro.get("NUI", ""),         disabled=True)
+        col2.text_input("Responsable", registro.get("Responsable", ""), disabled=True)
+        col3.text_input("Semáforo",    str(registro.get("Semaforo", "")), disabled=True)
+
+        # Único campo editable
         nueva_descripcion = st.text_area("Descripción", registro.get("Descripción", ""), height=120)
+
         col_a, col_b, _  = st.columns([1, 1, 3])
         guardar  = col_a.form_submit_button("💾 Guardar cambios")
         eliminar = col_b.form_submit_button("🗑️ Eliminar registro", type="secondary")
 
     if guardar:
-        df_abiertos.loc[index_sel, "Responsable"] = nuevo_responsable
-        df_abiertos.loc[index_sel, "Semaforo"]    = nuevo_semaforo
         df_abiertos.loc[index_sel, "Descripción"] = nueva_descripcion
         try:
             with st.spinner("Guardando en OneDrive…"):
@@ -517,8 +525,12 @@ if busqueda:
     mask     = df_tabla.astype(str).apply(lambda col: col.str.contains(busqueda, case=False)).any(axis=1)
     df_tabla = df_tabla[mask]
 
+# Mostrar solo columnas definidas, en el orden correcto
+cols_dash = [c for c in COLUMNAS_TABLA if c in df_tabla.columns]
+df_vista  = df_tabla[cols_dash]
+
 st.dataframe(
-    df_tabla.style.apply(lambda row: [
+    df_vista.style.apply(lambda row: [
         "background-color: #1a2e1a" if row.get("Semaforo") == "🟢 En tiempo"
         else "background-color: #2e2a1a" if row.get("Semaforo") == "🟡 En riesgo"
         else "background-color: #2e1a1a" if row.get("Semaforo") == "🔴 Vencido"
