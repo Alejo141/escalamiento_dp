@@ -307,8 +307,8 @@ with st.sidebar:
 # NAVEGACIÓN
 # ─────────────────────────────────────────────
 
-TABS = ["📈 Escalamiento", "✅ Casos Cerrados", "🛠️ Gestionar"] if es_admin() \
-       else ["📈 Escalamiento", "✅ Casos Cerrados"]
+TABS = ["📈 Escalamiento", "✅ Casos Gestionados", "🛠️ Gestionar"] if es_admin() \
+       else ["📈 Escalamiento", "✅ Casos Gestionados"]
 
 dashboard = st.selectbox("Seleccionar módulo", TABS, label_visibility="collapsed")
 
@@ -348,9 +348,28 @@ if dashboard == "🛠️ Gestionar":
     if f_responsable != "Todos":
         df_edit = df_edit[df_edit["Responsable"] == f_responsable]
 
+    # ── Tabla 1: Gestión SAC ──
+    st.subheader("📋 Gestión SAC")
+    df_cerrados_edit = df_cerrados.copy()
+    if f_nui:
+        df_cerrados_edit = df_cerrados_edit[df_cerrados_edit["NUI"].astype(str).str.contains(f_nui, case=False)]
+    if f_seccional != "Todos" and "NombreSeccionales" in df_cerrados_edit.columns:
+        df_cerrados_edit = df_cerrados_edit[df_cerrados_edit["NombreSeccionales"] == f_seccional]
+    if f_responsable != "Todos" and "Responsable" in df_cerrados_edit.columns:
+        df_cerrados_edit = df_cerrados_edit[df_cerrados_edit["Responsable"] == f_responsable]
+    cols_cerrados = [c for c in COLUMNAS_TABLA if c in df_cerrados_edit.columns]
+    st.markdown(f"**{len(df_cerrados_edit)}** registros")
+    st.dataframe(df_cerrados_edit[cols_cerrados] if cols_cerrados else df_cerrados_edit,
+                 use_container_width=True, height=280)
+
+    st.divider()
+
+    # ── Tabla 2: Consolidado ──
+    st.subheader("📂 Consolidado")
     st.markdown(f"**{len(df_edit)}** registros encontrados")
     cols_visibles = [c for c in COLUMNAS_TABLA if c in df_edit.columns]
-    st.dataframe(df_edit[cols_visibles], use_container_width=True, height=300)
+    st.dataframe(df_edit[cols_visibles] if cols_visibles else df_edit,
+                 use_container_width=True, height=280)
 
     if df_edit.empty:
         st.info("No hay registros que coincidan.")
@@ -439,7 +458,7 @@ if rango_fechas and len(rango_fechas) == 2:
             (df["FechaCreacion"].dt.date <= rango_fechas[1])]
 
 # KPIs
-titulo = "📈 Gestión Escalamiento" if es_escalamiento else "✅ Gestión Casos Cerrados"
+titulo = "📈 Gestión Escalamiento" if es_escalamiento else "✅ Gestión Casos Gestionados"
 st.title(titulo)
 
 total     = len(df)
@@ -456,6 +475,33 @@ k3.metric("NUIs únicos",   nuis)
 k4.metric("Promedio días", prom_dias)
 k5.metric("🔴 Vencidos",   vencidos,  delta=f"-{vencidos}"  if vencidos  else None, delta_color="inverse")
 k6.metric("🟡 En riesgo",  en_riesgo, delta=f"-{en_riesgo}" if en_riesgo else None, delta_color="inverse")
+
+st.divider()
+
+# ── TABLA PRIMERO ──
+st.subheader("📋 Detalle de tickets")
+busqueda_top = st.text_input("🔍 Búsqueda rápida", "", key="busqueda_top")
+df_tabla_top = df.copy()
+if busqueda_top:
+    mask = df_tabla_top.astype(str).apply(lambda col: col.str.contains(busqueda_top, case=False)).any(axis=1)
+    df_tabla_top = df_tabla_top[mask]
+cols_top  = [c for c in COLUMNAS_TABLA if c in df_tabla_top.columns]
+df_top    = df_tabla_top[cols_top] if cols_top else df_tabla_top
+st.dataframe(
+    df_top.style.apply(lambda row: [
+        "background-color: #1a2e1a" if row.get("Semaforo") == "🟢 En tiempo"
+        else "background-color: #2e2a1a" if row.get("Semaforo") == "🟡 En riesgo"
+        else "background-color: #2e1a1a" if row.get("Semaforo") == "🔴 Vencido"
+        else "" for _ in row], axis=1),
+    use_container_width=True, height=380,
+)
+st.download_button(
+    label="⬇️ Exportar tabla a Excel",
+    data=a_excel(df_tabla_top),
+    file_name=f"SAC_export_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    key="export_top",
+)
 
 st.divider()
 
@@ -515,32 +561,3 @@ fig_hist.add_vline(x=5,  line_dash="dash", line_color="#4ade80", annotation_text
 fig_hist.add_vline(x=10, line_dash="dash", line_color="#facc15", annotation_text="Límite amarillo (10)")
 fig_hist.update_layout(plot_bgcolor="#161a24", paper_bgcolor="#161a24", margin=dict(l=0,r=0,t=10,b=0))
 st.plotly_chart(fig_hist, use_container_width=True)
-
-# Tabla detalle
-st.divider()
-st.subheader("📋 Detalle de tickets")
-busqueda = st.text_input("🔍 Búsqueda rápida", "")
-df_tabla = df.copy()
-if busqueda:
-    mask     = df_tabla.astype(str).apply(lambda col: col.str.contains(busqueda, case=False)).any(axis=1)
-    df_tabla = df_tabla[mask]
-
-# Mostrar solo columnas definidas, en el orden correcto
-cols_dash = [c for c in COLUMNAS_TABLA if c in df_tabla.columns]
-df_vista  = df_tabla[cols_dash]
-
-st.dataframe(
-    df_vista.style.apply(lambda row: [
-        "background-color: #1a2e1a" if row.get("Semaforo") == "🟢 En tiempo"
-        else "background-color: #2e2a1a" if row.get("Semaforo") == "🟡 En riesgo"
-        else "background-color: #2e1a1a" if row.get("Semaforo") == "🔴 Vencido"
-        else "" for _ in row], axis=1),
-    use_container_width=True, height=400,
-)
-
-st.download_button(
-    label="⬇️ Exportar vista actual a Excel",
-    data=a_excel(df_tabla),
-    file_name=f"SAC_export_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-)
