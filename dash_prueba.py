@@ -400,16 +400,36 @@ if dashboard == "🛠️ Gestionar":
     # Lista de responsables únicos de Consolidado
     responsables_lista = sorted(df_abiertos["Responsable"].dropna().unique().tolist())
 
+    # Opciones fijas de SubMenu1
+    OPCIONES_SUBMENU1 = [
+        "Reposición",
+        "Sin SISFV Instalada",
+        "Restricciones Acceso",
+        "Usuario Ausente",
+        "Traslados No Autorizado",
+        "Suspension del servicio",
+        "Reconexion del servicio",
+        "SISFV Funcional",
+        "Ausencia de Partes",
+        "SISFV Abandonado",
+        "Equipos modificados",
+    ]
+
     with st.form("form_edicion"):
         # Campos de solo lectura (informativos)
         col1, col2 = st.columns(2)
-        col1.text_input("NUI",      registro.get("NUI", ""),            disabled=True)
-        col2.text_input("Semáforo", str(registro.get("Semaforo", "")),  disabled=True)
+        col1.text_input("NUI",      registro.get("NUI", ""),           disabled=True)
+        col2.text_input("Semáforo", str(registro.get("Semaforo", "")), disabled=True)
 
         # Responsable: lista desplegable con los existentes en Consolidado
         responsable_actual = registro.get("Responsable", "")
         idx_resp = responsables_lista.index(responsable_actual) if responsable_actual in responsables_lista else 0
         nuevo_responsable = st.selectbox("Responsable", responsables_lista, index=idx_resp)
+
+        # SubMenu1: lista fija de opciones
+        submenu_actual = str(registro.get("SubMenu1", ""))
+        idx_sub = OPCIONES_SUBMENU1.index(submenu_actual) if submenu_actual in OPCIONES_SUBMENU1 else 0
+        nuevo_submenu1 = st.selectbox("SubMenu1", OPCIONES_SUBMENU1, index=idx_sub)
 
         # Descripción editable
         nueva_descripcion = st.text_area("Descripción", registro.get("Descripción", ""), height=120)
@@ -420,6 +440,7 @@ if dashboard == "🛠️ Gestionar":
 
     if guardar:
         df_abiertos.loc[index_sel, "Responsable"] = nuevo_responsable
+        df_abiertos.loc[index_sel, "SubMenu1"]    = nuevo_submenu1
         df_abiertos.loc[index_sel, "Descripción"] = nueva_descripcion
         try:
             with st.spinner("Guardando en OneDrive…"):
