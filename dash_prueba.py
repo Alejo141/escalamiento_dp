@@ -132,22 +132,63 @@ def cargar_datos() -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def guardar_datos(df_abiertos: pd.DataFrame, df_cerrados: pd.DataFrame) -> None:
-    buf = BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as w:
-        df_abiertos.to_excel(w, index=False, sheet_name=SHEET_ABIERTOS)
-        df_cerrados.to_excel(w, index=False, sheet_name=SHEET_CERRADOS)
-    buf.seek(0)
-    url  = _drive_url() + "/content"
-    resp = requests.put(
-        url,
+    """
+    Descarga el archivo original, actualiza los datos fila por fila
+    preservando el formato de tabla (Table) de cada hoja, y lo sube.
+    """
+    from openpyxl import load_workbook
+    from openpyxl.utils import get_column_letter
+
+    # 1 — Descargar el archivo original para preservar formato
+    url_content = _drive_url() + "/content"
+    resp_get    = requests.get(url_content, headers=headers(), timeout=30)
+    resp_get.raise_for_status()
+    buf_orig = BytesIO(resp_get.content)
+
+    wb = load_workbook(buf_orig)
+
+    def actualizar_hoja(wb, nombre_hoja: str, df: pd.DataFrame) -> None:
+        ws = wb[nombre_hoja]
+
+        # Detectar la tabla Excel en la hoja
+        tabla = list(ws.tables.values())
+
+        # Limpiar datos existentes (mantener fila de encabezado)
+        for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+            for cell in row:
+                cell.value = None
+
+        # Escribir nuevos datos fila por fila
+        for r_idx, (_, row_data) in enumerate(df.iterrows(), start=2):
+            for c_idx, value in enumerate(row_data, start=1):
+                ws.cell(row=r_idx, column=c_idx, value=value)
+
+        # Actualizar el rango de la tabla para que incluya los nuevos datos
+        if tabla:
+            t = tabla[0]
+            ref_start = t.ref.split(":")[0]  # ej: A1
+            col_end   = get_column_letter(len(df.columns))
+            row_end   = len(df) + 1          # +1 por el encabezado
+            t.ref     = f"{ref_start}:{col_end}{row_end}"
+
+    actualizar_hoja(wb, SHEET_ABIERTOS, df_abiertos)
+    actualizar_hoja(wb, SHEET_CERRADOS, df_cerrados)
+
+    # 2 — Guardar en buffer y subir a OneDrive
+    buf_out = BytesIO()
+    wb.save(buf_out)
+    buf_out.seek(0)
+
+    resp_put = requests.put(
+        url_content,
         headers={
             **headers(),
             "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         },
-        data=buf.read(),
+        data=buf_out.read(),
         timeout=60,
     )
-    resp.raise_for_status()
+    resp_put.raise_for_status()
 
 # ─────────────────────────────────────────────
 # AUTENTICACIÓN — ROLES
