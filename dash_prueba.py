@@ -1,7 +1,9 @@
 """
-Dashboard SAC — OneDrive local
-Fuente única: archivo Excel en OneDrive local.
-Soporta lectura, edición y eliminación de registros.
+Dashboard SAC
+- Visualización pública (viewer)
+- Edición/eliminación solo para admin autenticado
+- Credenciales en Streamlit Secrets
+- Archivo local OneDrive
 """
 
 import streamlit as st
@@ -26,18 +28,17 @@ st.set_page_config(
 # CONSTANTES
 # ─────────────────────────────────────────────
 
-RUTA_ARCHIVO      = "https://suncompanycol-my.sharepoint.com/personal/sac_dispower_co/_layouts/15/download.aspx?share=IQCZdWeEKv2MQqzrXf_pTpc5Ac3Q-CdpYUqcrFp-JsJGfeU&e=UGwIKN"
+RUTA_ARCHIVO    = r"C:\Users\USUARIO\OneDrive - SUNCOLOMBIA SAS (1)\1. Escalamiento\Consolidado_Informacion_pruebas.xlsx"
 SHEET_ABIERTOS  = "Consolidado"
 SHEET_CERRADOS  = "Gestion_SAC"
 
 BINS_SEMAFORO   = [-999, 5, 10, 999]
 LABELS_SEMAFORO = ["🟢 En tiempo", "🟡 En riesgo", "🔴 Vencido"]
 PALETA          = ["#8f5cda", "#7069d8", "#3a81d5", "#38a9d2", "#4cb2ca", "#a78bfa"]
-
 COLUMNAS_REQUERIDAS = ["FechaCreacion", "Responsable", "NombreSeccionales", "NUI"]
 
 # ─────────────────────────────────────────────
-# ESTILOS GLOBALES
+# ESTILOS
 # ─────────────────────────────────────────────
 
 st.markdown("""
@@ -46,38 +47,104 @@ st.markdown("""
 section[data-testid="stSidebar"] { background-color: #161a24; }
 h1, h2, h3, h4 { color: #8f5cda !important; }
 p, label, .stMarkdown { color: #d1d5db; }
-
 div[data-testid="metric-container"] {
     background: linear-gradient(135deg, #161a24, #1e2130);
     border: 1px solid #2a2f3a;
     border-left: 4px solid #8f5cda;
-    padding: 14px 18px;
-    border-radius: 12px;
+    padding: 14px 18px; border-radius: 12px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 div[data-testid="stMetricValue"] { color: #ffffff !important; font-size: 2rem !important; }
 div[data-testid="stMetricLabel"] { color: #9ca3af !important; }
 div[data-testid="stMetricDelta"] { font-size: 0.85rem; }
-
 .stDataFrame { border-radius: 10px; overflow: hidden; }
-
 .stButton > button {
     background: linear-gradient(135deg, #8f5cda, #3a81d5);
     color: white; border: none; border-radius: 8px;
     padding: 8px 20px; font-weight: 600; transition: opacity .2s;
 }
 .stButton > button:hover { opacity: .85; }
-.stSelectbox > div, .stMultiSelect > div { background-color: #1e2130; border-radius: 8px; }
 hr { border-color: #2a2f3a; }
-
 .badge {
     display: inline-block; background: #1e2130;
     border: 1px solid #3a81d5; color: #38a9d2;
     border-radius: 20px; padding: 2px 12px;
     font-size: 0.75rem; margin-bottom: 12px;
 }
+.role-badge-admin {
+    display: inline-block; background: #1a2e1a;
+    border: 1px solid #4ade80; color: #4ade80;
+    border-radius: 20px; padding: 2px 14px;
+    font-size: 0.78rem; font-weight: 600;
+}
+.role-badge-viewer {
+    display: inline-block; background: #1e2130;
+    border: 1px solid #9ca3af; color: #9ca3af;
+    border-radius: 20px; padding: 2px 14px;
+    font-size: 0.78rem;
+}
+.login-box {
+    background: #161a24; border: 1px solid #2a2f3a;
+    border-radius: 14px; padding: 32px 28px;
+    max-width: 380px; margin: 40px auto;
+}
 </style>
 """, unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────
+# AUTENTICACIÓN — SISTEMA DE ROLES
+# ─────────────────────────────────────────────
+
+def verificar_credenciales(usuario: str, password: str) -> str | None:
+    """
+    Retorna el rol ('admin') si las credenciales son válidas,
+    None si no coinciden con ningún usuario registrado.
+    Los usuarios se definen en Streamlit Secrets:
+
+    [usuarios]
+    admin1 = { password = "xxxx", rol = "admin" }
+    admin2 = { password = "yyyy", rol = "admin" }
+    """
+    usuarios = st.secrets.get("usuarios", {})
+    user_cfg = usuarios.get(usuario)
+    if user_cfg and user_cfg.get("password") == password:
+        return user_cfg.get("rol")
+    return None
+
+
+def es_admin() -> bool:
+    return st.session_state.get("rol") == "admin"
+
+
+def mostrar_login_sidebar() -> None:
+    """Muestra el panel de login en el sidebar si no hay sesión activa."""
+    with st.sidebar:
+        st.divider()
+        if es_admin():
+            st.markdown(
+                f'<div class="role-badge-admin">🔐 Admin: {st.session_state["usuario"]}</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("🚪 Cerrar sesión", use_container_width=True):
+                st.session_state.pop("rol", None)
+                st.session_state.pop("usuario", None)
+                st.rerun()
+        else:
+            st.markdown("### 🔐 Acceso Admin")
+            with st.form("form_login", clear_on_submit=True):
+                usr = st.text_input("Usuario")
+                pwd = st.text_input("Contraseña", type="password")
+                login_btn = st.form_submit_button("Iniciar sesión", use_container_width=True)
+
+            if login_btn:
+                rol = verificar_credenciales(usr, pwd)
+                if rol:
+                    st.session_state["rol"]     = rol
+                    st.session_state["usuario"] = usr
+                    st.success(f"✅ Bienvenido, {usr}")
+                    st.rerun()
+                else:
+                    st.error("Usuario o contraseña incorrectos.")
 
 # ─────────────────────────────────────────────
 # UTILIDADES
@@ -117,7 +184,7 @@ def guardar_archivo(df_abiertos: pd.DataFrame, df_cerrados: pd.DataFrame) -> Non
 def validar_columnas(df: pd.DataFrame, nombre: str) -> None:
     faltantes = [c for c in COLUMNAS_REQUERIDAS if c not in df.columns]
     if faltantes:
-        st.warning(f"⚠️ **{nombre}** no tiene las columnas: `{', '.join(faltantes)}`")
+        st.warning(f"⚠️ **{nombre}** le faltan columnas: `{', '.join(faltantes)}`")
 
 # ─────────────────────────────────────────────
 # CARGA DE DATOS
@@ -132,43 +199,58 @@ def cargar_datos():
 try:
     df_abiertos, df_cerrados = cargar_datos()
 except Exception as e:
-    st.error(f"❌ No se pudo leer el archivo en OneDrive:\n\n`{e}`")
-    st.caption(f"Ruta configurada: `{RUTA_ARCHIVO}`")
+    st.error(f"❌ No se pudo leer el archivo:\n\n`{e}`")
+    st.caption(f"Ruta: `{RUTA_ARCHIVO}`")
     st.stop()
 
 validar_columnas(df_abiertos, SHEET_ABIERTOS)
 validar_columnas(df_cerrados, SHEET_CERRADOS)
 
 # ─────────────────────────────────────────────
-# SIDEBAR — FILTROS
+# SIDEBAR — LOGIN + FILTROS
 # ─────────────────────────────────────────────
+
+mostrar_login_sidebar()
 
 with st.sidebar:
     st.markdown("## 🔎 Filtros")
 
 # ─────────────────────────────────────────────
-# NAVEGACIÓN PRINCIPAL
+# NAVEGACIÓN
 # ─────────────────────────────────────────────
 
-TABS = ["📈 Escalamiento", "✅ Casos Cerrados", "🛠️ Gestionar"]
+# El módulo Gestionar solo aparece si es admin
+TABS_VIEWER = ["📈 Escalamiento", "✅ Casos Cerrados"]
+TABS_ADMIN  = ["📈 Escalamiento", "✅ Casos Cerrados", "🛠️ Gestionar"]
+TABS = TABS_ADMIN if es_admin() else TABS_VIEWER
+
 dashboard = st.selectbox("Seleccionar módulo", TABS, label_visibility="collapsed")
 
+rol_label = (
+    f'<span class="role-badge-admin">🔐 Admin</span>'
+    if es_admin() else
+    f'<span class="role-badge-viewer">👁️ Viewer</span>'
+)
 st.markdown(
-    f'<div class="badge">📁 OneDrive · Actualizado: {datetime.now().strftime("%d/%m/%Y %H:%M")}</div>',
+    f'<div class="badge">📁 OneDrive · {datetime.now().strftime("%d/%m/%Y %H:%M")} &nbsp;{rol_label}</div>',
     unsafe_allow_html=True,
 )
 
 # ═══════════════════════════════════════════════
-# MÓDULO: GESTIONAR
+# MÓDULO: GESTIONAR  (solo admin)
 # ═══════════════════════════════════════════════
 
 if dashboard == "🛠️ Gestionar":
+
+    # Doble protección: aunque alguien manipule la URL
+    if not es_admin():
+        st.error("🔒 Acceso restringido. Inicia sesión como administrador.")
+        st.stop()
 
     st.title("🛠️ Gestión de Tickets")
 
     df_edit = df_abiertos.copy()
 
-    # — Filtros rápidos —
     with st.expander("🔍 Filtros de búsqueda", expanded=True):
         c1, c2, c3, c4 = st.columns(4)
         f_nui         = c1.text_input("NUI")
@@ -189,7 +271,7 @@ if dashboard == "🛠️ Gestionar":
     st.dataframe(df_edit, use_container_width=True, height=300)
 
     if df_edit.empty:
-        st.info("No hay registros que coincidan con los filtros.")
+        st.info("No hay registros que coincidan.")
         st.stop()
 
     st.divider()
@@ -209,8 +291,7 @@ if dashboard == "🛠️ Gestionar":
         col1, col2 = st.columns(2)
         nuevo_responsable = col1.text_input("Responsable", registro.get("Responsable", ""))
         nuevo_semaforo    = col2.selectbox(
-            "Semáforo",
-            LABELS_SEMAFORO,
+            "Semáforo", LABELS_SEMAFORO,
             index=LABELS_SEMAFORO.index(registro["Semaforo"])
                   if registro.get("Semaforo") in LABELS_SEMAFORO else 0,
         )
@@ -221,28 +302,35 @@ if dashboard == "🛠️ Gestionar":
         eliminar = col_b.form_submit_button("🗑️ Eliminar registro", type="secondary")
 
     if guardar:
-        df_abiertos.loc[index_sel, "Responsable"] = nuevo_responsable
-        df_abiertos.loc[index_sel, "Semaforo"]    = nuevo_semaforo
-        df_abiertos.loc[index_sel, "Descripción"] = nueva_descripcion
-        try:
-            guardar_archivo(df_abiertos, df_cerrados)
-            st.success("✅ Cambios guardados correctamente en OneDrive.")
-        except Exception as e:
-            st.error(f"❌ No se pudo guardar: `{e}`")
-        st.cache_data.clear()
-        st.rerun()
+        if not es_admin():
+            st.error("🔒 Sin permisos para guardar.")
+        else:
+            df_abiertos.loc[index_sel, "Responsable"] = nuevo_responsable
+            df_abiertos.loc[index_sel, "Semaforo"]    = nuevo_semaforo
+            df_abiertos.loc[index_sel, "Descripción"] = nueva_descripcion
+            try:
+                with st.spinner("Guardando en OneDrive…"):
+                    guardar_archivo(df_abiertos, df_cerrados)
+                st.success("✅ Cambios guardados correctamente.")
+            except Exception as e:
+                st.error(f"❌ Error al guardar: `{e}`")
+            st.cache_data.clear()
+            st.rerun()
 
     if eliminar:
-        if st.session_state.get("confirm_delete") != index_sel:
+        if not es_admin():
+            st.error("🔒 Sin permisos para eliminar.")
+        elif st.session_state.get("confirm_delete") != index_sel:
             st.session_state["confirm_delete"] = index_sel
-            st.warning("⚠️ Presiona **Eliminar registro** de nuevo para confirmar la eliminación.")
+            st.warning("⚠️ Presiona **Eliminar registro** de nuevo para confirmar.")
         else:
             df_abiertos.drop(index=index_sel, inplace=True)
             try:
-                guardar_archivo(df_abiertos, df_cerrados)
-                st.warning("🗑️ Registro eliminado y archivo guardado en OneDrive.")
+                with st.spinner("Guardando cambios…"):
+                    guardar_archivo(df_abiertos, df_cerrados)
+                st.warning("🗑️ Registro eliminado correctamente.")
             except Exception as e:
-                st.error(f"❌ No se pudo guardar tras eliminar: `{e}`")
+                st.error(f"❌ Error al eliminar: `{e}`")
             st.session_state.pop("confirm_delete", None)
             st.cache_data.clear()
             st.rerun()
@@ -250,14 +338,13 @@ if dashboard == "🛠️ Gestionar":
     st.stop()
 
 # ═══════════════════════════════════════════════
-# MÓDULO: ESCALAMIENTO / CASOS CERRADOS
+# MÓDULO: ESCALAMIENTO / CASOS CERRADOS (público)
 # ═══════════════════════════════════════════════
 
 es_escalamiento = dashboard == "📈 Escalamiento"
 df_base = df_abiertos.copy() if es_escalamiento else df_cerrados.copy()
 df_base = aplicar_semaforo(df_base)
 
-# — Filtros sidebar —
 with st.sidebar:
     responsables = st.multiselect("Responsable", sorted(df_base["Responsable"].dropna().unique()))
     seccionales  = st.multiselect("Seccional",   sorted(df_base["NombreSeccionales"].dropna().unique()))
@@ -286,10 +373,7 @@ if rango_fechas and len(rango_fechas) == 2:
         (df["FechaCreacion"].dt.date <= rango_fechas[1])
     ]
 
-# ─────────────────────────────────────────────
 # KPIs
-# ─────────────────────────────────────────────
-
 titulo = "📈 Gestión Escalamiento" if es_escalamiento else "✅ Gestión Casos Cerrados"
 st.title(titulo)
 
@@ -310,10 +394,7 @@ k6.metric("🟡 En riesgo",   en_riesgo, delta=f"-{en_riesgo}" if en_riesgo else
 
 st.divider()
 
-# ─────────────────────────────────────────────
-# GRÁFICOS — FILA 1
-# ─────────────────────────────────────────────
-
+# Gráficos fila 1
 col_g1, col_g2 = st.columns([2, 1])
 
 with col_g1:
@@ -339,11 +420,7 @@ with col_g2:
     st.subheader("🚦 Semáforo")
     df_sem = df["Semaforo"].value_counts().reset_index()
     df_sem.columns = ["Estado", "Cantidad"]
-    colores_sem = {
-        "🟢 En tiempo": "#4ade80",
-        "🟡 En riesgo": "#facc15",
-        "🔴 Vencido":   "#f87171",
-    }
+    colores_sem = {"🟢 En tiempo": "#4ade80", "🟡 En riesgo": "#facc15", "🔴 Vencido": "#f87171"}
     fig_pie = px.pie(
         df_sem, names="Estado", values="Cantidad",
         color="Estado", color_discrete_map=colores_sem,
@@ -357,10 +434,7 @@ with col_g2:
     fig_pie.update_traces(textinfo="percent+label", textfont_size=12)
     st.plotly_chart(fig_pie, use_container_width=True)
 
-# ─────────────────────────────────────────────
-# GRÁFICOS — FILA 2
-# ─────────────────────────────────────────────
-
+# Gráficos fila 2
 col_g3, col_g4 = st.columns(2)
 
 with col_g3:
@@ -402,10 +476,7 @@ with col_g4:
     fig_tree.update_layout(paper_bgcolor="#161a24", margin=dict(l=0, r=0, t=10, b=0))
     st.plotly_chart(fig_tree, use_container_width=True)
 
-# ─────────────────────────────────────────────
-# GRÁFICO — FILA 3: Distribución días hábiles
-# ─────────────────────────────────────────────
-
+# Gráfico fila 3
 st.subheader("📦 Distribución de días hábiles")
 fig_hist = px.histogram(
     df.dropna(subset=["Dias_Habiles"]),
@@ -422,10 +493,7 @@ fig_hist.update_layout(
 )
 st.plotly_chart(fig_hist, use_container_width=True)
 
-# ─────────────────────────────────────────────
-# TABLA DETALLE
-# ─────────────────────────────────────────────
-
+# Tabla detalle
 st.divider()
 st.subheader("📋 Detalle de tickets")
 
@@ -448,10 +516,6 @@ st.dataframe(
     use_container_width=True,
     height=400,
 )
-
-# ─────────────────────────────────────────────
-# EXPORTAR
-# ─────────────────────────────────────────────
 
 st.download_button(
     label="⬇️ Exportar vista actual a Excel",
