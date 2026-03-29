@@ -275,13 +275,13 @@ def mostrar_login_sidebar() -> None:
                 f'<div class="role-admin">🔐 Admin: {st.session_state["usuario"]}</div>',
                 unsafe_allow_html=True,
             )
-            if st.button("🚪 Cerrar sesión", use_container_width=True):
+            if st.button("🔌 Cerrar sesión", use_container_width=True):
                 st.session_state.pop("rol",     None)
                 st.session_state.pop("usuario", None)
                 st.rerun()
         else:
             # Login oculto — se despliega al hacer clic en la flecha
-            with st.expander("🔐 ›", expanded=False):
+            with st.expander("🔑 ›", expanded=False):
                 with st.form("form_login", clear_on_submit=True):
                     usr = st.text_input("Usuario")
                     pwd = st.text_input("Contraseña", type="password")
@@ -432,14 +432,14 @@ validar_columnas(df_cerrados, SHEET_CERRADOS)
 mostrar_login_sidebar()
 
 with st.sidebar:
-    st.markdown("## 🔎 Filtros")
+    st.markdown("## ⚡ Filtros")
 
 # ─────────────────────────────────────────────
 # NAVEGACIÓN
 # ─────────────────────────────────────────────
 
-TABS = ["📈 Escalamiento", "✅ Casos Gestionados", "🛠️ Gestionar"] if es_admin() \
-       else ["📈 Escalamiento", "✅ Casos Gestionados"]
+TABS = ["⚡ Escalamiento", "💡 Casos Gestionados", "🔧 Gestionar"] if es_admin() \
+       else ["⚡ Escalamiento", "💡 Casos Gestionados"]
 
 dashboard = st.selectbox("Seleccionar módulo", TABS, label_visibility="collapsed")
 
@@ -460,12 +460,12 @@ st.markdown("""
 col_badge, col_btn = st.columns([7, 1])
 with col_badge:
     st.markdown(
-        f'<div class="badge">☁️ OneDrive · {datetime.now().strftime("%d/%m/%Y %H:%M")} &nbsp;{rol_html}</div>',
+        f'<div class="badge">🔌 OneDrive · {datetime.now().strftime("%d/%m/%Y %H:%M")} &nbsp;{rol_html}</div>',
         unsafe_allow_html=True,
     )
 with col_btn:
     st.markdown('<div class="btn-verde">', unsafe_allow_html=True)
-    if st.button("🔄 Actualizar", use_container_width=True):
+    if st.button("⚡ Actualizar", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
@@ -473,16 +473,16 @@ with col_btn:
 # MÓDULO: GESTIONAR  (solo admin)
 # ═══════════════════════════════════════════════
 
-if dashboard == "🛠️ Gestionar":
+if dashboard == "🔧 Gestionar":
 
     if not es_admin():
         st.error("🔒 Acceso restringido. Inicia sesión como administrador.")
         st.stop()
 
-    st.title("🛠️ Gestión de Tickets")
+    st.title("🔧 Gestión de Tickets")
     df_edit = df_abiertos.copy()
 
-    with st.expander("🔍 Filtros de búsqueda", expanded=True):
+    with st.expander("🔎 Filtros de búsqueda", expanded=True):
         c1, c2, c3, c4 = st.columns(4)
         f_nui         = c1.text_input("NUI")
         f_ticket      = c2.text_input("Id_Tickets")
@@ -499,7 +499,7 @@ if dashboard == "🛠️ Gestionar":
         df_edit = df_edit[df_edit["Responsable"] == f_responsable]
 
     # ── Tabla 1: Gestión SAC ──
-    st.subheader("📋 Gestión SAC")
+    st.subheader("🗂️ Gestión SAC")
     df_cerrados_edit = df_cerrados.copy()
     if f_nui:
         df_cerrados_edit = df_cerrados_edit[df_cerrados_edit["NUI"].astype(str).str.contains(f_nui, case=False)]
@@ -515,7 +515,7 @@ if dashboard == "🛠️ Gestionar":
     st.divider()
 
     # ── Tabla 2: Consolidado ──
-    st.subheader("📂 Consolidado")
+    st.subheader("📑 Consolidado")
     st.markdown(f"**{len(df_edit)}** registros encontrados")
     cols_visibles = [c for c in COLUMNAS_TABLA if c in df_edit.columns]
     st.dataframe(df_edit[cols_visibles] if cols_visibles else df_edit,
@@ -526,7 +526,7 @@ if dashboard == "🛠️ Gestionar":
         st.stop()
 
     st.divider()
-    st.subheader("✏️ Editar registro")
+    st.subheader("⚙️ Editar registro")
 
     index_sel = st.selectbox(
         "Selecciona un registro", df_edit.index,
@@ -571,7 +571,7 @@ if dashboard == "🛠️ Gestionar":
         nueva_descripcion = st.text_area("Descripción", registro.get("Descripción", ""), height=120)
 
         col_a, col_b, _  = st.columns([1, 1, 3])
-        guardar  = col_a.form_submit_button("💾 Guardar cambios")
+        guardar  = col_a.form_submit_button("✅ Guardar cambios")
         eliminar = col_b.form_submit_button("🗑️ Eliminar registro", type="secondary")
 
     if guardar:
@@ -609,7 +609,7 @@ if dashboard == "🛠️ Gestionar":
 # MÓDULO: ESCALAMIENTO / CASOS CERRADOS
 # ═══════════════════════════════════════════════
 
-es_escalamiento = dashboard == "📈 Escalamiento"
+es_escalamiento = dashboard == "⚡ Escalamiento"
 df_base = df_abiertos.copy() if es_escalamiento else df_cerrados.copy()
 df_base = aplicar_semaforo(df_base)
 
@@ -647,7 +647,7 @@ if rango_fechas and len(rango_fechas) == 2:
             (df["FechaCreacion"].dt.date <= rango_fechas[1])]
 
 # KPIs
-titulo = "📈 Gestión Escalamiento" if es_escalamiento else "✅ Gestión Casos Gestionados"
+titulo = "⚡ Gestión Escalamiento" if es_escalamiento else "💡 Gestión Casos Gestionados"
 st.title(titulo)
 
 total     = len(df)
@@ -749,7 +749,7 @@ if col_activo and valor_activo:
         st.markdown(
             f'<div style="background:#1e2130;border:1px solid #8f5cda;color:#a78bfa;'
             f'border-radius:20px;padding:4px 16px;font-size:0.82rem;display:inline-block;">'
-            f'🔍 Filtro activo — <b>{col_activo}</b>: <b>{valor_activo}</b></div>',
+            f'⚡ Filtro activo — <b>{col_activo}</b>: <b>{valor_activo}</b></div>',
             unsafe_allow_html=True,
         )
     with bc2:
@@ -761,8 +761,8 @@ if col_activo and valor_activo:
 df_g = aplicar_cf(df)
 
 # ── TABLA PRIMERO ──
-st.subheader("📋 Detalle de tickets")
-busqueda_top = st.text_input("🔍 Búsqueda rápida", "", key="busqueda_top")
+st.subheader("⚡ Detalle de tickets")
+busqueda_top = st.text_input("🔎 Búsqueda rápida", "", key="busqueda_top")
 df_tabla_top = df_g.copy()
 if busqueda_top:
     mask = df_tabla_top.astype(str).apply(lambda col: col.str.contains(busqueda_top, case=False)).any(axis=1)
@@ -786,7 +786,7 @@ st.dataframe(
 )
 cols_export = [c for c in COLUMNAS_TABLA if c in df_tabla_top.columns]
 st.download_button(
-    label="⬇️ Exportar tabla a Excel",
+    label="📥 Exportar tabla a Excel",
     data=a_excel(df_tabla_top[cols_export]),
     file_name=f"SAC_export_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -797,7 +797,7 @@ st.download_button(
 # ── FILA 1: Seccional + Semáforo ──
 col_g1, col_g2 = st.columns([2, 1])
 with col_g1:
-    st.subheader("📊 Tickets por Seccional")
+    st.subheader("🏘️ Tickets por Seccional")
     df_sec = df_g.groupby("NombreSeccionales").size().reset_index(name="Tickets").sort_values("Tickets", ascending=True)
     fig_bar = px.bar(df_sec, x="Tickets", y="NombreSeccionales", orientation="h",
                      color="NombreSeccionales", color_discrete_sequence=PALETA, template="plotly_dark")
@@ -805,7 +805,7 @@ with col_g1:
     grafico_cf(fig_bar, "cf_seccional", "NombreSeccionales")
 
 with col_g2:
-    st.subheader("🚦 Semáforo")
+    st.subheader("🚦 Estado del Servicio")
     df_sem = df_g["Semaforo_KPI"].value_counts().reset_index()
     df_sem.columns = ["Estado","Cantidad"]
     fig_pie = px.pie(df_sem, names="Estado", values="Cantidad", hole=0.55, template="plotly_dark",
@@ -817,7 +817,7 @@ with col_g2:
 # ── FILA 2: Tendencia + Treemap (sin cross-filter — son informativos) ──
 col_g3, col_g4 = st.columns(2)
 with col_g3:
-    st.subheader("📅 Tendencia de creación")
+    st.subheader("📈 Tendencia de creación")
     if df_g["FechaCreacion"].notna().any():
         df_trend = (df_g.dropna(subset=["FechaCreacion"])
                       .assign(Mes=lambda x: x["FechaCreacion"].dt.to_period("M").astype(str))
@@ -832,7 +832,7 @@ with col_g3:
         st.info("Sin datos de fecha disponibles.")
 
 with col_g4:
-    st.subheader("🗺️ Treemap Seccional × Responsable")
+    st.subheader("🗺️ Cobertura Seccional × Responsable")
     df_tree = df_g.groupby(["NombreSeccionales","Responsable"]).size().reset_index(name="Tickets")
     fig_tree = px.treemap(df_tree, path=["NombreSeccionales","Responsable"], values="Tickets",
                           color="Tickets", color_continuous_scale=["#3a81d5","#8f5cda","#f472b6"],
@@ -841,7 +841,7 @@ with col_g4:
     st.plotly_chart(fig_tree, use_container_width=True)
 
 # ── FILA 3: SubMenu1 — ancho completo ──
-st.subheader("🏷️ Tickets por SubMenu1")
+st.subheader("⚡ Tickets por Categoría")
 if "SubMenu1" in df_g.columns:
     df_sub = (df_g.groupby("SubMenu1").size().reset_index(name="Tickets")
                 .sort_values("Tickets", ascending=True))
@@ -855,7 +855,7 @@ else:
 # ── FILA 4: SubMenu2 + SubMenu3 ──
 col_g5, col_g6 = st.columns(2)
 with col_g5:
-    st.subheader("🏷️ Tickets por SubMenu2")
+    st.subheader("🔌 Tickets por SubCategoría")
     if "SubMenu2" in df_g.columns and df_g["SubMenu2"].notna().any():
         df_sub2 = (df_g.groupby("SubMenu2").size().reset_index(name="Tickets")
                      .sort_values("Tickets", ascending=True))
@@ -867,7 +867,7 @@ with col_g5:
         st.info("Columna SubMenu2 no disponible o sin datos.")
 
 with col_g6:
-    st.subheader("🏷️ Tickets por SubMenu3")
+    st.subheader("💡 Tickets por Detalle")
     if "SubMenu3" in df_g.columns and df_g["SubMenu3"].notna().any():
         df_sub3 = (df_g.groupby("SubMenu3").size().reset_index(name="Tickets")
                      .sort_values("Tickets", ascending=True))
@@ -881,7 +881,7 @@ with col_g6:
 # ── FILA 5: Top 10 Responsables + Tiempo promedio cierre ──
 col_g7, col_g8 = st.columns(2)
 with col_g7:
-    st.subheader("🏆 Top 10 Responsables con más Tickets")
+    st.subheader("👷 Top 10 Responsables con más Tickets")
     if "Responsable" in df_g.columns:
         df_resp = (df_g.groupby("Responsable").size().reset_index(name="Tickets")
                      .sort_values("Tickets", ascending=False).head(10)
@@ -892,7 +892,7 @@ with col_g7:
         grafico_cf(fig_resp, "cf_responsable", "Responsable")
 
 with col_g8:
-    st.subheader("⏱️ Tiempo Promedio de Cierre por Responsable")
+    st.subheader("⏱️ Tiempo Promedio de Atención por Responsable")
     if "Responsable" in df_g.columns and df_g["Dias_Habiles"].notna().any():
         df_cierre = (df_g.groupby("Responsable")["Dias_Habiles"].mean().reset_index()
                        .rename(columns={"Dias_Habiles":"Dias para Cierre"})
