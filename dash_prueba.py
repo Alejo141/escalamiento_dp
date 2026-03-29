@@ -668,41 +668,6 @@ k6.metric("🟡 En riesgo",  en_riesgo, delta=f"-{en_riesgo}" if en_riesgo else 
 
 st.divider()
 
-# ── TABLA PRIMERO ──
-st.subheader("📋 Detalle de tickets")
-busqueda_top = st.text_input("🔍 Búsqueda rápida", "", key="busqueda_top")
-df_tabla_top = aplicar_cf(df).copy()
-if busqueda_top:
-    mask = df_tabla_top.astype(str).apply(lambda col: col.str.contains(busqueda_top, case=False)).any(axis=1)
-    df_tabla_top = df_tabla_top[mask]
-cols_top  = [c for c in COLUMNAS_TABLA if c in df_tabla_top.columns]
-df_top    = df_tabla_top[cols_top].copy() if cols_top else df_tabla_top.copy()
-
-# Formatear columnas de fecha a dd/mm/yyyy para visualización
-COLS_FECHA = ["FechaCreacion", "Fecha Asignación", "Fecha Respuesta"]
-for col_f in COLS_FECHA:
-    if col_f in df_top.columns:
-        df_top[col_f] = pd.to_datetime(df_top[col_f], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
-
-st.dataframe(
-    df_top.style.apply(lambda row: [
-        "background-color: #1a2e1a" if row.get("Semaforo_KPI") == "🟢 En tiempo"
-        else "background-color: #2e2a1a" if row.get("Semaforo_KPI") == "🟡 En riesgo"
-        else "background-color: #2e1a1a" if row.get("Semaforo_KPI") == "🔴 Vencido"
-        else "" for _ in row], axis=1),
-    use_container_width=True, height=380,
-)
-cols_export = [c for c in COLUMNAS_TABLA if c in df_tabla_top.columns]
-st.download_button(
-    label="⬇️ Exportar tabla a Excel",
-    data=a_excel(df_tabla_top[cols_export]),
-    file_name=f"SAC_export_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    key="export_top",
-)
-
-st.divider()
-
 LAYOUT = dict(plot_bgcolor="#161a24", paper_bgcolor="#161a24", margin=dict(l=0,r=0,t=30,b=0),
               legend=dict(bgcolor="rgba(0,0,0,0)", font_color="#d1d5db"),
               font=dict(color="#d1d5db"))
@@ -770,6 +735,40 @@ df_g = aplicar_cf(df)
 
 # Badge del filtro activo
 badge_cf()
+
+# ── TABLA PRIMERO ──
+st.subheader("📋 Detalle de tickets")
+busqueda_top = st.text_input("🔍 Búsqueda rápida", "", key="busqueda_top")
+df_tabla_top = aplicar_cf(df).copy()
+if busqueda_top:
+    mask = df_tabla_top.astype(str).apply(lambda col: col.str.contains(busqueda_top, case=False)).any(axis=1)
+    df_tabla_top = df_tabla_top[mask]
+cols_top  = [c for c in COLUMNAS_TABLA if c in df_tabla_top.columns]
+df_top    = df_tabla_top[cols_top].copy() if cols_top else df_tabla_top.copy()
+
+# Formatear columnas de fecha a dd/mm/yyyy para visualización
+COLS_FECHA = ["FechaCreacion", "Fecha Asignación", "Fecha Respuesta"]
+for col_f in COLS_FECHA:
+    if col_f in df_top.columns:
+        df_top[col_f] = pd.to_datetime(df_top[col_f], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
+
+st.dataframe(
+    df_top.style.apply(lambda row: [
+        "background-color: #1a2e1a" if row.get("Semaforo_KPI") == "🟢 En tiempo"
+        else "background-color: #2e2a1a" if row.get("Semaforo_KPI") == "🟡 En riesgo"
+        else "background-color: #2e1a1a" if row.get("Semaforo_KPI") == "🔴 Vencido"
+        else "" for _ in row], axis=1),
+    use_container_width=True, height=380,
+)
+cols_export = [c for c in COLUMNAS_TABLA if c in df_tabla_top.columns]
+st.download_button(
+    label="⬇️ Exportar tabla a Excel",
+    data=a_excel(df_tabla_top[cols_export]),
+    file_name=f"SAC_export_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    key="export_top",
+)
+
 
 # ── FILA 1: Seccional + Semáforo ──
 col_g1, col_g2 = st.columns([2, 1])
