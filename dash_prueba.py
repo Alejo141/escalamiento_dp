@@ -778,6 +778,7 @@ with col_g6:
         st.plotly_chart(fig_resp, use_container_width=True)
 
 # ── FILA 4: Tiempo promedio cierre por responsable + Distribución días ──
+# ── FILA 4: Tiempo promedio cierre + SubMenu2 ──
 col_g7, col_g8 = st.columns(2)
 with col_g7:
     st.subheader("⏱️ Tiempo Promedio de Cierre por Responsable")
@@ -792,11 +793,25 @@ with col_g7:
         st.plotly_chart(fig_cierre, use_container_width=True)
 
 with col_g8:
-    st.subheader("📦 Distribución de días hábiles")
-    fig_hist = px.histogram(df.dropna(subset=["Dias_Habiles"]), x="Dias_Habiles", nbins=20,
-                            color_discrete_sequence=["#7069d8"], template="plotly_dark",
-                            labels={"Dias_Habiles":"Días hábiles"})
-    fig_hist.add_vline(x=5,  line_dash="dash", line_color="#4ade80", annotation_text="Límite verde (5)")
-    fig_hist.add_vline(x=10, line_dash="dash", line_color="#facc15", annotation_text="Límite amarillo (10)")
-    fig_hist.update_layout(**LAYOUT)
-    st.plotly_chart(fig_hist, use_container_width=True)
+    st.subheader("🏷️ Tickets por SubMenu2")
+    if "SubMenu2" in df.columns and df["SubMenu2"].notna().any():
+        df_sub2 = (df.groupby("SubMenu2").size().reset_index(name="Tickets")
+                     .sort_values("Tickets", ascending=True))
+        fig_sub2 = px.bar(df_sub2, x="Tickets", y="SubMenu2", orientation="h",
+                          color="SubMenu2", color_discrete_sequence=PALETA, template="plotly_dark")
+        fig_sub2.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
+        st.plotly_chart(fig_sub2, use_container_width=True)
+    else:
+        st.info("Columna SubMenu2 no disponible o sin datos.")
+
+# ── FILA 5: SubMenu3 ──
+st.subheader("🏷️ Tickets por SubMenu3")
+if "SubMenu3" in df.columns and df["SubMenu3"].notna().any():
+    df_sub3 = (df.groupby("SubMenu3").size().reset_index(name="Tickets")
+                 .sort_values("Tickets", ascending=True))
+    fig_sub3 = px.bar(df_sub3, x="Tickets", y="SubMenu3", orientation="h",
+                      color="SubMenu3", color_discrete_sequence=PALETA, template="plotly_dark")
+    fig_sub3.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
+    st.plotly_chart(fig_sub3, use_container_width=True)
+else:
+    st.info("Columna SubMenu3 no disponible o sin datos.")
