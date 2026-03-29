@@ -38,6 +38,7 @@ st.set_page_config(
 
 SHEET_ABIERTOS      = "Consolidado"
 SHEET_CERRADOS      = "Gestion_SAC"
+SHEET_LOG           = "Log_Cambios"
 BINS_SEMAFORO       = [-999, 5, 10, 999]
 LABELS_SEMAFORO     = ["🟢 En tiempo", "🟡 En riesgo", "🔴 Vencido"]
 COLUMNAS_REQUERIDAS = ["FechaCreacion", "Responsable", "NombreSeccionales", "NUI"]
@@ -237,6 +238,51 @@ def cargar_datos() -> tuple[pd.DataFrame, pd.DataFrame]:
     df_a = _normalizar_col_responsable(df_a)
     df_c = _normalizar_col_responsable(df_c)
     return df_a, df_c
+
+
+def registrar_log(
+    usuario: str,
+    accion: str,       # "EDITAR" | "ELIMINAR"
+    nui: str,
+    campo: str,
+    valor_anterior: str,
+    valor_nuevo: str,
+) -> None:
+    """
+    Agrega una fila al log de auditoría en la hoja Log_Cambios del Excel.
+    Si la hoja no existe la crea.
+    """
+    from openpyxl import load_workbook
+    from openpyxl.utils import get_column_letter
+
+    url_content = _drive_url() + "/content"
+    resp_get    = requests.get(url_content, headers=headers(), timeout=30)
+    resp_get.raise_for_status()
+    wb = load_workbook(BytesIO(resp_get.content))
+
+    # Crear hoja de log si no existe
+    if SHEET_LOG not in wb.sheetnames:
+        ws_log = wb.create_sheet(SHEET_LOG)
+        ws_log.append(["Fecha", "Usuario", "Acción", "NUI", "Campo", "Valor anterior", "Valor nuevo"])
+    else:
+        ws_log = wb[SHEET_LOG]
+
+    ws_log.append([
+        datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+        usuario,
+        accion,
+        str(nui),
+        campo,
+        str(valor_anterior),
+        str(valor_nuevo),
+    ])
+
+    buf_out = BytesIO()
+    wb.save(buf_out)
+    buf_out.seek(0)
+    requests.put(url_content, headers={**headers(),
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+        data=buf_out.read(), timeout=60).raise_for_status()
 
 
 def guardar_datos(df_abiertos: pd.DataFrame, df_cerrados: pd.DataFrame) -> None:
@@ -887,12 +933,23 @@ if dashboard == "🔧 Gestionar":
         eliminar = col_b.form_submit_button("🗑️ Eliminar registro", type="secondary")
 
     if guardar:
+        usuario_log = st.session_state.get("usuario", "desconocido")
+        nui_log     = str(registro.get("NUI", ""))
+        # Registrar cambios campo por campo
+        cambios = {
+            "Responsable": (registro.get("Responsable", ""), nuevo_responsable),
+            "SubMenu1":    (registro.get("SubMenu1", ""),    nuevo_submenu1),
+            "Descripción": (registro.get("Descripción", ""), nueva_descripcion),
+        }
         df_abiertos.loc[index_sel, "Responsable"] = nuevo_responsable
         df_abiertos.loc[index_sel, "SubMenu1"]    = nuevo_submenu1
         df_abiertos.loc[index_sel, "Descripción"] = nueva_descripcion
         try:
             with st.spinner("Guardando en OneDrive…"):
                 guardar_datos(df_abiertos, df_cerrados)
+                for campo, (ant, nvo) in cambios.items():
+                    if str(ant) != str(nvo):
+                        registrar_log(usuario_log, "EDITAR", nui_log, campo, ant, nvo)
             st.success("✅ Cambios guardados en OneDrive.")
         except Exception as e:
             st.error(f"❌ Error al guardar: `{e}`")
@@ -904,16 +961,40 @@ if dashboard == "🔧 Gestionar":
             st.session_state["confirm_delete"] = index_sel
             st.warning("⚠️ Presiona **Eliminar registro** de nuevo para confirmar.")
         else:
+            nui_elim     = str(registro.get("NUI", ""))
+            usuario_elim = st.session_state.get("usuario", "desconocido")
             df_abiertos.drop(index=index_sel, inplace=True)
             try:
                 with st.spinner("Guardando cambios…"):
                     guardar_datos(df_abiertos, df_cerrados)
+                    registrar_log(usuario_elim, "ELIMINAR", nui_elim, "—", "Registro completo", "Eliminado")
                 st.warning("🗑️ Registro eliminado correctamente.")
             except Exception as e:
                 st.error(f"❌ Error al eliminar: `{e}`")
             st.session_state.pop("confirm_delete", None)
             st.cache_data.clear()
             st.rerun()
+
+    # ── Log de auditoría (solo admin) ──
+    st.divider()
+    st.subheader("📋 Registro de auditoría")
+    try:
+        url_log  = _drive_url() + "/content"
+        resp_log = requests.get(url_log, headers=headers(), timeout=30)
+        resp_log.raise_for_status()
+        df_log = pd.read_excel(BytesIO(resp_log.content),
+                               sheet_name=SHEET_LOG, engine="openpyxl")
+        df_log = df_log.sort_values("Fecha", ascending=False) if "Fecha" in df_log.columns else df_log
+        st.dataframe(df_log, use_container_width=True, height=300)
+        st.download_button(
+            label="📥 Exportar log a Excel",
+            data=a_excel(df_log),
+            file_name=f"SAC_log_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="export_log",
+        )
+    except Exception:
+        st.info("Aún no hay registros de auditoría. Se crearán al hacer la primera edición.")
 
     st.stop()
 
@@ -1254,3 +1335,63 @@ with col_g4:
                           template="plotly_dark")
     fig_tree.update_layout(**LAYOUT)
     st.plotly_chart(fig_tree, use_container_width=True, key="fig_tree")
+
+# ── FILA 6: Heatmap Seccional × Mes ──
+st.divider()
+st.subheader("🌡️ Heatmap de tickets por Seccional × Mes")
+if "FechaCreacion" in df.columns and "NombreSeccionales" in df.columns and df["FechaCreacion"].notna().any():
+    df_heat = (
+        df.dropna(subset=["FechaCreacion"])
+          .assign(Mes=lambda x: x["FechaCreacion"].dt.to_period("M").astype(str))
+          .groupby(["NombreSeccionales", "Mes"])
+          .size().reset_index(name="Tickets")
+    )
+    fig_heat = px.density_heatmap(
+        df_heat, x="Mes", y="NombreSeccionales", z="Tickets",
+        color_continuous_scale=["#161a24","#3a81d5","#8f5cda","#f472b6"],
+        template="plotly_dark",
+        labels={"Mes": "Mes", "NombreSeccionales": "Seccional", "Tickets": "Tickets"},
+    )
+    fig_heat.update_layout(**LAYOUT, coloraxis_colorbar=dict(title="Tickets"))
+    st.plotly_chart(fig_heat, use_container_width=True, key="fig_heat")
+else:
+    st.info("Sin datos suficientes para el heatmap.")
+
+# ── FILA 7: Antigüedad de tickets ──
+st.divider()
+st.subheader("⏳ Tickets agrupados por antigüedad")
+if "Dias_Habiles" in df.columns and df["Dias_Habiles"].notna().any():
+    bins_ant   = [0, 5, 15, 30, 60, float("inf")]
+    labels_ant = ["🟢 0-5 días", "🟡 6-15 días", "🟠 16-30 días", "🔴 31-60 días", "⛔ +60 días"]
+    df_ant = df.copy()
+    df_ant["Antigüedad"] = pd.cut(
+        df_ant["Dias_Habiles"], bins=bins_ant, labels=labels_ant, right=True
+    )
+    col_ant1, col_ant2 = st.columns([1, 2])
+
+    with col_ant1:
+        # Métricas por rango
+        resumen_ant = df_ant["Antigüedad"].value_counts().reindex(labels_ant).fillna(0).astype(int)
+        for rango, cantidad in resumen_ant.items():
+            st.metric(str(rango), cantidad)
+
+    with col_ant2:
+        # Gráfica de barras por antigüedad y responsable
+        df_ant_resp = (
+            df_ant.groupby(["Antigüedad", "Responsable"])
+                  .size().reset_index(name="Tickets")
+        )
+        df_ant_resp["Antigüedad"] = df_ant_resp["Antigüedad"].astype(str)
+        fig_ant = px.bar(
+            df_ant_resp,
+            x="Antigüedad", y="Tickets", color="Responsable",
+            color_discrete_sequence=PALETA,
+            template="plotly_dark",
+            category_orders={"Antigüedad": labels_ant},
+            labels={"Antigüedad": "Rango de días", "Tickets": "Tickets"},
+            barmode="stack",
+        )
+        fig_ant.update_layout(**LAYOUT)
+        st.plotly_chart(fig_ant, use_container_width=True, key="fig_antiguedad")
+else:
+    st.info("Sin datos de días hábiles disponibles.")
