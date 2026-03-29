@@ -557,34 +557,144 @@ def generar_pdf(
             story.append(t)
             story.append(Spacer(1, 6))
 
-    # ── Tabla resumen ──
-    story.append(Paragraph("Detalle de tickets (primeras 50 filas)", st_sub))
-    df_pdf = df_tabla.head(50).copy()
-    # Formatear fechas
-    for c in ["FechaCreacion", "Fecha Asignación", "Fecha Respuesta"]:
-        if c in df_pdf.columns:
-            df_pdf[c] = pd.to_datetime(df_pdf[c], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
+    # ── Resumen de casos por resolver ──
+    story.append(Paragraph("Resumen de casos por resolver", st_sub))
 
-    encabezados = list(df_pdf.columns)
-    filas = [encabezados] + df_pdf.fillna("").astype(str).values.tolist()
+    d = df_tabla.copy()
 
-    col_w = ancho_pagina / max(len(encabezados), 1)
-    tabla = Table(filas, colWidths=[col_w] * len(encabezados), repeatRows=1)
-    tabla.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, 0),  colors.HexColor("#8f5cda")),
-        ("TEXTCOLOR",     (0, 0), (-1, 0),  colors.white),
-        ("FONTNAME",      (0, 0), (-1, 0),  "Helvetica-Bold"),
-        ("FONTSIZE",      (0, 0), (-1, -1), 6),
-        ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.HexColor("#1e2130"), colors.HexColor("#161a24")]),
-        ("TEXTCOLOR",     (0, 1), (-1, -1), colors.HexColor("#d1d5db")),
-        ("ALIGN",         (0, 0), (-1, -1), "LEFT"),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 3),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 3),
-        ("TOPPADDING",    (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-        ("GRID",          (0, 0), (-1, -1), 0.3, colors.HexColor("#2a2f3a")),
-    ]))
-    story.append(tabla)
+    # ── 1. Por Responsable ──
+    story.append(Paragraph("<b>Casos por Responsable</b>", st_normal))
+    if "Responsable" in d.columns:
+        df_resp = (d.groupby("Responsable").size()
+                    .reset_index(name="Tickets")
+                    .sort_values("Tickets", ascending=False))
+        filas_resp = [["Responsable", "Tickets"]] + df_resp.fillna("").astype(str).values.tolist()
+        t_resp = Table(filas_resp, colWidths=[ancho_pagina * 0.7, ancho_pagina * 0.3])
+        t_resp.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, 0),  colors.HexColor("#8f5cda")),
+            ("TEXTCOLOR",     (0, 0), (-1, 0),  colors.white),
+            ("FONTNAME",      (0, 0), (-1, 0),  "Helvetica-Bold"),
+            ("FONTSIZE",      (0, 0), (-1, -1), 8),
+            ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.HexColor("#1e2130"), colors.HexColor("#161a24")]),
+            ("TEXTCOLOR",     (0, 1), (-1, -1), colors.HexColor("#d1d5db")),
+            ("ALIGN",         (0, 0), (-1, -1), "LEFT"),
+            ("ALIGN",         (1, 0), (1,  -1), "CENTER"),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
+            ("TOPPADDING",    (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("GRID",          (0, 0), (-1, -1), 0.3, colors.HexColor("#2a2f3a")),
+        ]))
+        story.append(t_resp)
+        story.append(Spacer(1, 10))
+
+    # ── 2. Por Seccional ──
+    story.append(Paragraph("<b>Casos por Seccional</b>", st_normal))
+    if "NombreSeccionales" in d.columns:
+        df_secc = (d.groupby("NombreSeccionales").size()
+                    .reset_index(name="Tickets")
+                    .sort_values("Tickets", ascending=False))
+        filas_secc = [["Seccional", "Tickets"]] + df_secc.fillna("").astype(str).values.tolist()
+        t_secc = Table(filas_secc, colWidths=[ancho_pagina * 0.7, ancho_pagina * 0.3])
+        t_secc.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, 0),  colors.HexColor("#3a81d5")),
+            ("TEXTCOLOR",     (0, 0), (-1, 0),  colors.white),
+            ("FONTNAME",      (0, 0), (-1, 0),  "Helvetica-Bold"),
+            ("FONTSIZE",      (0, 0), (-1, -1), 8),
+            ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.HexColor("#1e2130"), colors.HexColor("#161a24")]),
+            ("TEXTCOLOR",     (0, 1), (-1, -1), colors.HexColor("#d1d5db")),
+            ("ALIGN",         (0, 0), (-1, -1), "LEFT"),
+            ("ALIGN",         (1, 0), (1,  -1), "CENTER"),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
+            ("TOPPADDING",    (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("GRID",          (0, 0), (-1, -1), 0.3, colors.HexColor("#2a2f3a")),
+        ]))
+        story.append(t_secc)
+        story.append(Spacer(1, 10))
+
+    # ── 3. Por Semáforo ──
+    story.append(Paragraph("<b>Casos por Estado (Semáforo)</b>", st_normal))
+    if "Semaforo_KPI" in d.columns:
+        df_sem = (d.groupby("Semaforo_KPI").size()
+                   .reset_index(name="Tickets")
+                   .sort_values("Tickets", ascending=False))
+        filas_sem = [["Estado", "Tickets"]] + df_sem.fillna("").astype(str).values.tolist()
+        t_sem = Table(filas_sem, colWidths=[ancho_pagina * 0.7, ancho_pagina * 0.3])
+        t_sem.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, 0),  colors.HexColor("#374151")),
+            ("TEXTCOLOR",     (0, 0), (-1, 0),  colors.white),
+            ("FONTNAME",      (0, 0), (-1, 0),  "Helvetica-Bold"),
+            ("FONTSIZE",      (0, 0), (-1, -1), 8),
+            ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.HexColor("#1e2130"), colors.HexColor("#161a24")]),
+            ("TEXTCOLOR",     (0, 1), (-1, -1), colors.HexColor("#d1d5db")),
+            ("ALIGN",         (0, 0), (-1, -1), "LEFT"),
+            ("ALIGN",         (1, 0), (1,  -1), "CENTER"),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
+            ("TOPPADDING",    (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("GRID",          (0, 0), (-1, -1), 0.3, colors.HexColor("#2a2f3a")),
+        ]))
+        story.append(t_sem)
+        story.append(Spacer(1, 10))
+
+    # ── 4. Por Categoría (SubMenu1) ──
+    story.append(Paragraph("<b>Casos por Categoría (SubMenu1)</b>", st_normal))
+    if "SubMenu1" in d.columns:
+        df_sub1 = (d.groupby("SubMenu1").size()
+                    .reset_index(name="Tickets")
+                    .sort_values("Tickets", ascending=False))
+        filas_sub1 = [["Categoría", "Tickets"]] + df_sub1.fillna("").astype(str).values.tolist()
+        t_sub1 = Table(filas_sub1, colWidths=[ancho_pagina * 0.7, ancho_pagina * 0.3])
+        t_sub1.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, 0),  colors.HexColor("#7069d8")),
+            ("TEXTCOLOR",     (0, 0), (-1, 0),  colors.white),
+            ("FONTNAME",      (0, 0), (-1, 0),  "Helvetica-Bold"),
+            ("FONTSIZE",      (0, 0), (-1, -1), 8),
+            ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.HexColor("#1e2130"), colors.HexColor("#161a24")]),
+            ("TEXTCOLOR",     (0, 1), (-1, -1), colors.HexColor("#d1d5db")),
+            ("ALIGN",         (0, 0), (-1, -1), "LEFT"),
+            ("ALIGN",         (1, 0), (1,  -1), "CENTER"),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
+            ("TOPPADDING",    (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("GRID",          (0, 0), (-1, -1), 0.3, colors.HexColor("#2a2f3a")),
+        ]))
+        story.append(t_sub1)
+        story.append(Spacer(1, 10))
+
+    # ── 5. Top 10 casos más antiguos (mayor días hábiles) ──
+    story.append(Paragraph("<b>Top 10 casos más antiguos sin resolver</b>", st_normal))
+    cols_antiguos = [c for c in ["NUI", "NombreSeccionales", "Responsable", "SubMenu1",
+                                  "FechaCreacion", "Dias_Habiles", "Descripción"] if c in d.columns]
+    if cols_antiguos and "Dias_Habiles" in d.columns:
+        df_ant = (d[cols_antiguos].sort_values("Dias_Habiles", ascending=False).head(10).copy())
+        if "FechaCreacion" in df_ant.columns:
+            df_ant["FechaCreacion"] = pd.to_datetime(df_ant["FechaCreacion"], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
+        # Truncar Descripción para que no explote la tabla
+        if "Descripción" in df_ant.columns:
+            df_ant["Descripción"] = df_ant["Descripción"].astype(str).str[:60]
+        col_w_ant = ancho_pagina / len(cols_antiguos)
+        filas_ant = [cols_antiguos] + df_ant.fillna("").astype(str).values.tolist()
+        t_ant = Table(filas_ant, colWidths=[col_w_ant] * len(cols_antiguos), repeatRows=1)
+        t_ant.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, 0),  colors.HexColor("#f87171")),
+            ("TEXTCOLOR",     (0, 0), (-1, 0),  colors.white),
+            ("FONTNAME",      (0, 0), (-1, 0),  "Helvetica-Bold"),
+            ("FONTSIZE",      (0, 0), (-1, -1), 7),
+            ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.HexColor("#2e1a1a"), colors.HexColor("#1e2130")]),
+            ("TEXTCOLOR",     (0, 1), (-1, -1), colors.HexColor("#fca5a5")),
+            ("ALIGN",         (0, 0), (-1, -1), "LEFT"),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
+            ("TOPPADDING",    (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("GRID",          (0, 0), (-1, -1), 0.3, colors.HexColor("#7f1d1d")),
+        ]))
+        story.append(t_ant)
 
     # ── Pie de página ──
     story.append(Spacer(1, 12))
