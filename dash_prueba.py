@@ -372,11 +372,30 @@ dashboard = st.selectbox("Seleccionar módulo", TABS, label_visibility="collapse
 
 rol_html = '<span class="role-admin">🔐 Admin</span>' if es_admin() \
            else '<span class="role-viewer">👁️ Viewer</span>'
-st.markdown(
-    f'<div class="badge">☁️ OneDrive · {datetime.now().strftime("%d/%m/%Y %H:%M")} &nbsp;{rol_html}</div>',
-    unsafe_allow_html=True,
-)
 
+st.markdown("""
+<style>
+.btn-verde > button {
+    background: linear-gradient(135deg, #16a34a, #15803d) !important;
+    color: white !important; border: none !important;
+    border-radius: 8px !important; font-weight: 600 !important;
+}
+.btn-verde > button:hover { opacity: .85 !important; }
+</style>
+""", unsafe_allow_html=True)
+
+col_badge, col_btn = st.columns([7, 1])
+with col_badge:
+    st.markdown(
+        f'<div class="badge">☁️ OneDrive · {datetime.now().strftime("%d/%m/%Y %H:%M")} &nbsp;{rol_html}</div>',
+        unsafe_allow_html=True,
+    )
+with col_btn:
+    st.markdown('<div class="btn-verde">', unsafe_allow_html=True)
+    if st.button("🔄 Actualizar", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 # ═══════════════════════════════════════════════
 # MÓDULO: GESTIONAR  (solo admin)
 # ═══════════════════════════════════════════════
