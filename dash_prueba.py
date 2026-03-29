@@ -675,7 +675,14 @@ if busqueda_top:
     mask = df_tabla_top.astype(str).apply(lambda col: col.str.contains(busqueda_top, case=False)).any(axis=1)
     df_tabla_top = df_tabla_top[mask]
 cols_top  = [c for c in COLUMNAS_TABLA if c in df_tabla_top.columns]
-df_top    = df_tabla_top[cols_top] if cols_top else df_tabla_top
+df_top    = df_tabla_top[cols_top].copy() if cols_top else df_tabla_top.copy()
+
+# Formatear columnas de fecha a dd/mm/yyyy para visualización
+COLS_FECHA = ["FechaCreacion", "Fecha Asignación", "Fecha Respuesta"]
+for col_f in COLS_FECHA:
+    if col_f in df_top.columns:
+        df_top[col_f] = pd.to_datetime(df_top[col_f], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
+
 st.dataframe(
     df_top.style.apply(lambda row: [
         "background-color: #1a2e1a" if row.get("Semaforo_KPI") == "🟢 En tiempo"
