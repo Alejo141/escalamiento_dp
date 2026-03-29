@@ -667,110 +667,17 @@ k6.metric("🟡 En riesgo",  en_riesgo, delta=f"-{en_riesgo}" if en_riesgo else 
 
 st.divider()
 
-LAYOUT = dict(plot_bgcolor="#161a24", paper_bgcolor="#161a24", margin=dict(l=0,r=0,t=30,b=0),
-              legend=dict(bgcolor="rgba(0,0,0,0)", font_color="#d1d5db"),
-              font=dict(color="#d1d5db"))
-
-# ─────────────────────────────────────────────
-# CROSS-FILTER — clic nativo con on_select
-# ─────────────────────────────────────────────
-
-# Inicializar estado
-for _k in ["cf_col","cf_valor"]:
-    if _k not in st.session_state:
-        st.session_state[_k] = None
-
-def aplicar_cf(df_in: pd.DataFrame) -> pd.DataFrame:
-    col   = st.session_state.get("cf_col")
-    valor = st.session_state.get("cf_valor")
-    if col and valor and col in df_in.columns:
-        return df_in[df_in[col].astype(str) == str(valor)]
-    return df_in
-
-def limpiar_cf():
-    st.session_state["cf_col"]   = None
-    st.session_state["cf_valor"] = None
-
-def _extraer_valor(sel, col_y: str = None):
-    """Extrae el valor seleccionado de on_select para barras o pie."""
-    try:
-        puntos = sel.get("points", [])
-        if not puntos:
-            return None
-        p = puntos[0]
-        # Barras horizontales: eje Y es la categoría
-        if col_y and "y" in p:
-            return p["y"]
-        # Pie: label
-        if "label" in p:
-            return p["label"]
-        # Barras verticales: eje X
-        if "x" in p:
-            return p["x"]
-    except Exception:
-        pass
-    return None
-
-def grafico_cf(fig, key: str, col_filtro: str, es_horizontal: bool = True, height: int = 400):
-    """
-    Muestra un gráfico con selección nativa on_select.
-    El filtro se guarda en session_state y se aplica en el siguiente rerun.
-    """
-    # Leer selección previa del session_state para resaltar
-    valor_activo = st.session_state.get("cf_valor")
-    col_activa   = st.session_state.get("cf_col")
-
-    sel = st.plotly_chart(
-        fig,
-        use_container_width=True,
-        on_select="rerun",
-        key=key,
-    )
-    # Procesar clic — esto corre en el SIGUIENTE rerun tras el clic
-    if sel and sel.get("points"):
-        valor = _extraer_valor(sel, col_y=col_filtro if es_horizontal else None)
-        if valor:
-            nuevo_valor = str(valor)
-            if col_activa == col_filtro and valor_activo == nuevo_valor:
-                # Segundo clic en mismo valor = deseleccionar
-                st.session_state["cf_col"]   = None
-                st.session_state["cf_valor"] = None
-            else:
-                st.session_state["cf_col"]   = col_filtro
-                st.session_state["cf_valor"] = nuevo_valor
-            st.rerun()
-
-# Badge del filtro activo
-col_activo   = st.session_state.get("cf_col")
-valor_activo = st.session_state.get("cf_valor")
-if col_activo and valor_activo:
-    bc1, bc2 = st.columns([8, 1])
-    with bc1:
-        st.markdown(
-            f'<div style="background:#1e2130;border:1px solid #8f5cda;color:#a78bfa;'
-            f'border-radius:20px;padding:4px 16px;font-size:0.82rem;display:inline-block;">'
-            f'⚡ Filtro activo — <b>{col_activo}</b>: <b>{valor_activo}</b></div>',
-            unsafe_allow_html=True,
-        )
-    with bc2:
-        if st.button("✕ Limpiar", key="btn_cf_limpiar", use_container_width=True):
-            limpiar_cf()
-            st.rerun()
-
-# Dataframe filtrado para gráficas y tabla
-df_g = aplicar_cf(df)
-
 # ── TABLA PRIMERO ──
 st.subheader("⚡ Detalle de tickets")
 busqueda_top = st.text_input("🔎 Búsqueda rápida", "", key="busqueda_top")
-df_tabla_top = df_g.copy()
+df_tabla_top = df.copy()
 if busqueda_top:
     mask = df_tabla_top.astype(str).apply(lambda col: col.str.contains(busqueda_top, case=False)).any(axis=1)
     df_tabla_top = df_tabla_top[mask]
-cols_top  = [c for c in COLUMNAS_TABLA if c in df_tabla_top.columns]
-df_top    = df_tabla_top[cols_top].copy() if cols_top else df_tabla_top.copy()
+cols_top = [c for c in COLUMNAS_TABLA if c in df_tabla_top.columns]
+df_top   = df_tabla_top[cols_top].copy() if cols_top else df_tabla_top.copy()
 
-# Formatear columnas de fecha a dd/mm/yyyy para visualización
+# Formatear columnas de fecha a dd/mm/yyyy
 COLS_FECHA = ["FechaCreacion", "Fecha Asignación", "Fecha Respuesta"]
 for col_f in COLS_FECHA:
     if col_f in df_top.columns:
@@ -793,33 +700,38 @@ st.download_button(
     key="export_top",
 )
 
+st.divider()
+
+LAYOUT = dict(plot_bgcolor="#161a24", paper_bgcolor="#161a24", margin=dict(l=0,r=0,t=30,b=0),
+              legend=dict(bgcolor="rgba(0,0,0,0)", font_color="#d1d5db"),
+              font=dict(color="#d1d5db"))
 
 # ── FILA 1: Seccional + Semáforo ──
 col_g1, col_g2 = st.columns([2, 1])
 with col_g1:
     st.subheader("🏘️ Tickets por Seccional")
-    df_sec = df_g.groupby("NombreSeccionales").size().reset_index(name="Tickets").sort_values("Tickets", ascending=True)
+    df_sec = df.groupby("NombreSeccionales").size().reset_index(name="Tickets").sort_values("Tickets", ascending=True)
     fig_bar = px.bar(df_sec, x="Tickets", y="NombreSeccionales", orientation="h",
                      color="NombreSeccionales", color_discrete_sequence=PALETA, template="plotly_dark")
     fig_bar.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-    grafico_cf(fig_bar, "cf_seccional", "NombreSeccionales")
+    st.plotly_chart(fig_bar, use_container_width=True)
 
 with col_g2:
     st.subheader("🚦 Estado del Servicio")
-    df_sem = df_g["Semaforo_KPI"].value_counts().reset_index()
-    df_sem.columns = ["Estado","Cantidad"]
+    df_sem = df["Semaforo_KPI"].value_counts().reset_index()
+    df_sem.columns = ["Estado", "Cantidad"]
     fig_pie = px.pie(df_sem, names="Estado", values="Cantidad", hole=0.55, template="plotly_dark",
-                     color="Estado", color_discrete_map={"🟢 En tiempo":"#4ade80","🟡 En riesgo":"#facc15","🔴 Vencido":"#f87171"})
+                     color="Estado", color_discrete_map={"🟢 En tiempo": "#4ade80", "🟡 En riesgo": "#facc15", "🔴 Vencido": "#f87171"})
     fig_pie.update_layout(**{**LAYOUT, "legend": dict(orientation="h", y=-0.15, bgcolor="rgba(0,0,0,0)", font_color="#d1d5db")})
     fig_pie.update_traces(textinfo="percent+label", textfont_size=12)
-    grafico_cf(fig_pie, "cf_semaforo", "Semaforo_KPI", es_horizontal=False)
+    st.plotly_chart(fig_pie, use_container_width=True)
 
-# ── FILA 2: Tendencia + Treemap (sin cross-filter — son informativos) ──
+# ── FILA 2: Tendencia + Treemap ──
 col_g3, col_g4 = st.columns(2)
 with col_g3:
     st.subheader("📈 Tendencia de creación")
-    if df_g["FechaCreacion"].notna().any():
-        df_trend = (df_g.dropna(subset=["FechaCreacion"])
+    if df["FechaCreacion"].notna().any():
+        df_trend = (df.dropna(subset=["FechaCreacion"])
                       .assign(Mes=lambda x: x["FechaCreacion"].dt.to_period("M").astype(str))
                       .groupby("Mes").size().reset_index(name="Tickets"))
         fig_line = px.line(df_trend, x="Mes", y="Tickets", markers=True,
@@ -833,72 +745,72 @@ with col_g3:
 
 with col_g4:
     st.subheader("🗺️ Cobertura Seccional × Responsable")
-    df_tree = df_g.groupby(["NombreSeccionales","Responsable"]).size().reset_index(name="Tickets")
-    fig_tree = px.treemap(df_tree, path=["NombreSeccionales","Responsable"], values="Tickets",
-                          color="Tickets", color_continuous_scale=["#3a81d5","#8f5cda","#f472b6"],
+    df_tree = df.groupby(["NombreSeccionales", "Responsable"]).size().reset_index(name="Tickets")
+    fig_tree = px.treemap(df_tree, path=["NombreSeccionales", "Responsable"], values="Tickets",
+                          color="Tickets", color_continuous_scale=["#3a81d5", "#8f5cda", "#f472b6"],
                           template="plotly_dark")
     fig_tree.update_layout(**LAYOUT)
     st.plotly_chart(fig_tree, use_container_width=True)
 
 # ── FILA 3: SubMenu1 — ancho completo ──
 st.subheader("⚡ Tickets por Categoría")
-if "SubMenu1" in df_g.columns:
-    df_sub = (df_g.groupby("SubMenu1").size().reset_index(name="Tickets")
+if "SubMenu1" in df.columns:
+    df_sub = (df.groupby("SubMenu1").size().reset_index(name="Tickets")
                 .sort_values("Tickets", ascending=True))
     fig_sub = px.bar(df_sub, x="Tickets", y="SubMenu1", orientation="h",
                      color="SubMenu1", color_discrete_sequence=PALETA, template="plotly_dark")
     fig_sub.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-    grafico_cf(fig_sub, "cf_submenu1", "SubMenu1")
+    st.plotly_chart(fig_sub, use_container_width=True)
 else:
     st.info("Columna SubMenu1 no disponible.")
 
-# ── FILA 4: SubMenu2 + SubMenu3 ──
+# ── FILA 4: SubMenu2 ← izq · SubMenu3 → der ──
 col_g5, col_g6 = st.columns(2)
 with col_g5:
     st.subheader("🔌 Tickets por SubCategoría")
-    if "SubMenu2" in df_g.columns and df_g["SubMenu2"].notna().any():
-        df_sub2 = (df_g.groupby("SubMenu2").size().reset_index(name="Tickets")
+    if "SubMenu2" in df.columns and df["SubMenu2"].notna().any():
+        df_sub2 = (df.groupby("SubMenu2").size().reset_index(name="Tickets")
                      .sort_values("Tickets", ascending=True))
         fig_sub2 = px.bar(df_sub2, x="Tickets", y="SubMenu2", orientation="h",
                           color="SubMenu2", color_discrete_sequence=PALETA, template="plotly_dark")
         fig_sub2.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-        grafico_cf(fig_sub2, "cf_submenu2", "SubMenu2")
+        st.plotly_chart(fig_sub2, use_container_width=True)
     else:
         st.info("Columna SubMenu2 no disponible o sin datos.")
 
 with col_g6:
     st.subheader("💡 Tickets por Detalle")
-    if "SubMenu3" in df_g.columns and df_g["SubMenu3"].notna().any():
-        df_sub3 = (df_g.groupby("SubMenu3").size().reset_index(name="Tickets")
+    if "SubMenu3" in df.columns and df["SubMenu3"].notna().any():
+        df_sub3 = (df.groupby("SubMenu3").size().reset_index(name="Tickets")
                      .sort_values("Tickets", ascending=True))
         fig_sub3 = px.bar(df_sub3, x="Tickets", y="SubMenu3", orientation="h",
                           color="SubMenu3", color_discrete_sequence=PALETA, template="plotly_dark")
         fig_sub3.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-        grafico_cf(fig_sub3, "cf_submenu3", "SubMenu3")
+        st.plotly_chart(fig_sub3, use_container_width=True)
     else:
         st.info("Columna SubMenu3 no disponible o sin datos.")
 
-# ── FILA 5: Top 10 Responsables + Tiempo promedio cierre ──
+# ── FILA 5: Top 10 Responsables ← izq · Tiempo promedio cierre → der ──
 col_g7, col_g8 = st.columns(2)
 with col_g7:
     st.subheader("👷 Top 10 Responsables con más Tickets")
-    if "Responsable" in df_g.columns:
-        df_resp = (df_g.groupby("Responsable").size().reset_index(name="Tickets")
+    if "Responsable" in df.columns:
+        df_resp = (df.groupby("Responsable").size().reset_index(name="Tickets")
                      .sort_values("Tickets", ascending=False).head(10)
                      .sort_values("Tickets", ascending=True))
         fig_resp = px.bar(df_resp, x="Tickets", y="Responsable", orientation="h",
                           color="Responsable", color_discrete_sequence=PALETA, template="plotly_dark")
         fig_resp.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-        grafico_cf(fig_resp, "cf_responsable", "Responsable")
+        st.plotly_chart(fig_resp, use_container_width=True)
 
 with col_g8:
     st.subheader("⏱️ Tiempo Promedio de Atención por Responsable")
-    if "Responsable" in df_g.columns and df_g["Dias_Habiles"].notna().any():
-        df_cierre = (df_g.groupby("Responsable")["Dias_Habiles"].mean().reset_index()
-                       .rename(columns={"Dias_Habiles":"Dias para Cierre"})
+    if "Responsable" in df.columns and df["Dias_Habiles"].notna().any():
+        df_cierre = (df.groupby("Responsable")["Dias_Habiles"].mean().reset_index()
+                       .rename(columns={"Dias_Habiles": "Dias para Cierre"})
                        .sort_values("Dias para Cierre", ascending=True))
         fig_cierre = px.bar(df_cierre, x="Dias para Cierre", y="Responsable", orientation="h",
                             color="Responsable", color_discrete_sequence=PALETA, template="plotly_dark",
-                            labels={"Dias para Cierre":"Días promedio"})
+                            labels={"Dias para Cierre": "Días promedio"})
         fig_cierre.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
         st.plotly_chart(fig_cierre, use_container_width=True)
