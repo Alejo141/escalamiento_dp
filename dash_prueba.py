@@ -620,6 +620,7 @@ with st.sidebar:
     menus     = st.multiselect("Menú",     sorted(df_base["Menu"].dropna().unique())     if "Menu"     in df_base.columns else [])
     submenus1 = st.multiselect("SubMenu1", sorted(df_base["SubMenu1"].dropna().unique()) if "SubMenu1" in df_base.columns else [])
     submenus2 = st.multiselect("SubMenu2", sorted(df_base["SubMenu2"].dropna().unique()) if "SubMenu2" in df_base.columns else [])
+    submenus3 = st.multiselect("SubMenu3", sorted(df_base["SubMenu3"].dropna().unique()) if "SubMenu3" in df_base.columns else [])
 
     fecha_min, fecha_max = df_base["FechaCreacion"].min(), df_base["FechaCreacion"].max()
     if pd.notna(fecha_min) and pd.notna(fecha_max) and fecha_min != fecha_max:
@@ -642,6 +643,8 @@ if submenus1 and "SubMenu1" in df.columns:
     df = df[df["SubMenu1"].isin(submenus1)]
 if submenus2 and "SubMenu2" in df.columns:
     df = df[df["SubMenu2"].isin(submenus2)]
+if submenus3 and "SubMenu3" in df.columns:
+    df = df[df["SubMenu3"].isin(submenus3)]
 if rango_fechas and len(rango_fechas) == 2:
     df = df[(df["FechaCreacion"].dt.date >= rango_fechas[0]) &
             (df["FechaCreacion"].dt.date <= rango_fechas[1])]
