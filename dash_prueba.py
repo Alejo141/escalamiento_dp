@@ -524,6 +524,11 @@ df_base = aplicar_semaforo(df_base)
 with st.sidebar:
     responsables = st.multiselect("Responsable", sorted(df_base["Responsable"].dropna().unique()))
     seccionales  = st.multiselect("Seccional",   sorted(df_base["NombreSeccionales"].dropna().unique()))
+
+    menus     = st.multiselect("Menú",     sorted(df_base["Menu"].dropna().unique())     if "Menu"     in df_base.columns else [])
+    submenus1 = st.multiselect("SubMenu1", sorted(df_base["SubMenu1"].dropna().unique()) if "SubMenu1" in df_base.columns else [])
+    submenus2 = st.multiselect("SubMenu2", sorted(df_base["SubMenu2"].dropna().unique()) if "SubMenu2" in df_base.columns else [])
+
     fecha_min, fecha_max = df_base["FechaCreacion"].min(), df_base["FechaCreacion"].max()
     if pd.notna(fecha_min) and pd.notna(fecha_max) and fecha_min != fecha_max:
         rango_fechas = st.date_input(
@@ -539,6 +544,12 @@ if responsables:
     df = df[df["Responsable"].isin(responsables)]
 if seccionales:
     df = df[df["NombreSeccionales"].isin(seccionales)]
+if menus and "Menu" in df.columns:
+    df = df[df["Menu"].isin(menus)]
+if submenus1 and "SubMenu1" in df.columns:
+    df = df[df["SubMenu1"].isin(submenus1)]
+if submenus2 and "SubMenu2" in df.columns:
+    df = df[df["SubMenu2"].isin(submenus2)]
 if rango_fechas and len(rango_fechas) == 2:
     df = df[(df["FechaCreacion"].dt.date >= rango_fechas[0]) &
             (df["FechaCreacion"].dt.date <= rango_fechas[1])]
