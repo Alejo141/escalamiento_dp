@@ -592,9 +592,10 @@ st.dataframe(
         else "" for _ in row], axis=1),
     use_container_width=True, height=380,
 )
+cols_export = [c for c in COLUMNAS_TABLA if c in df_tabla_top.columns]
 st.download_button(
     label="⬇️ Exportar tabla a Excel",
-    data=a_excel(df_tabla_top),
+    data=a_excel(df_tabla_top[cols_export]),
     file_name=f"SAC_export_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     key="export_top",
