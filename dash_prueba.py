@@ -12,7 +12,6 @@ import requests
 from io import BytesIO
 from datetime import datetime
 import numpy as np
-from streamlit_plotly_events import plotly_events
 
 # ─────────────────────────────────────────────
 # CONFIGURACIÓN GENERAL
@@ -673,68 +672,58 @@ LAYOUT = dict(plot_bgcolor="#161a24", paper_bgcolor="#161a24", margin=dict(l=0,r
               font=dict(color="#d1d5db"))
 
 # ─────────────────────────────────────────────
-# CROSS-FILTER — estado en session_state
+# CROSS-FILTER — selectboxes nativos de Streamlit
 # ─────────────────────────────────────────────
 
-if "cf_col" not in st.session_state:
-    st.session_state["cf_col"]   = None  # columna activa del filtro
-    st.session_state["cf_valor"] = None  # valor seleccionado
+def _opciones(col: str) -> list:
+    return ["Todos"] + sorted(df[col].dropna().unique().tolist()) if col in df.columns else ["Todos"]
+
+with st.expander("🔍 Filtrar gráficas por categoría", expanded=False):
+    cf1, cf2, cf3 = st.columns(3)
+    cf4, cf5, cf6 = st.columns(3)
+    sel_seccional  = cf1.selectbox("Seccional",  _opciones("NombreSeccionales"), key="cf_secc")
+    sel_semaforo   = cf2.selectbox("Semáforo",   _opciones("Semaforo_KPI"),       key="cf_sem")
+    sel_sub1       = cf3.selectbox("SubMenu1",   _opciones("SubMenu1"),           key="cf_sub1")
+    sel_sub2       = cf4.selectbox("SubMenu2",   _opciones("SubMenu2"),           key="cf_sub2")
+    sel_sub3       = cf5.selectbox("SubMenu3",   _opciones("SubMenu3"),           key="cf_sub3")
+    sel_resp       = cf6.selectbox("Responsable",_opciones("Responsable"),        key="cf_resp")
 
 def aplicar_cf(df_in: pd.DataFrame) -> pd.DataFrame:
-    """Aplica el filtro de cross-filter si hay uno activo."""
-    col   = st.session_state.get("cf_col")
-    valor = st.session_state.get("cf_valor")
-    if col and valor and col in df_in.columns:
-        return df_in[df_in[col].astype(str) == str(valor)]
-    return df_in
+    """Aplica los filtros de cross-filter seleccionados."""
+    d = df_in.copy()
+    if sel_seccional != "Todos" and "NombreSeccionales" in d.columns:
+        d = d[d["NombreSeccionales"] == sel_seccional]
+    if sel_semaforo  != "Todos" and "Semaforo_KPI"      in d.columns:
+        d = d[d["Semaforo_KPI"]      == sel_semaforo]
+    if sel_sub1      != "Todos" and "SubMenu1"          in d.columns:
+        d = d[d["SubMenu1"]          == sel_sub1]
+    if sel_sub2      != "Todos" and "SubMenu2"          in d.columns:
+        d = d[d["SubMenu2"]          == sel_sub2]
+    if sel_sub3      != "Todos" and "SubMenu3"          in d.columns:
+        d = d[d["SubMenu3"]          == sel_sub3]
+    if sel_resp      != "Todos" and "Responsable"       in d.columns:
+        d = d[d["Responsable"]       == sel_resp]
+    return d
 
-def limpiar_cf():
-    st.session_state["cf_col"]   = None
-    st.session_state["cf_valor"] = None
-
-def badge_cf():
-    """Muestra badge del filtro activo con botón para limpiar."""
-    col   = st.session_state.get("cf_col")
-    valor = st.session_state.get("cf_valor")
-    if col and valor:
-        c1, c2 = st.columns([6, 1])
-        with c1:
-            st.markdown(
-                f'<div style="background:#1e2130;border:1px solid #8f5cda;color:#a78bfa;'
-                f'border-radius:20px;padding:4px 14px;font-size:0.82rem;display:inline-block;">'
-                f'🔍 Filtro activo: <b>{col}</b> = <b>{valor}</b></div>',
-                unsafe_allow_html=True,
-            )
-        with c2:
-            if st.button("✕ Quitar", key="btn_limpiar_cf", use_container_width=True):
-                limpiar_cf()
-                st.rerun()
-
-def grafico_clickeable(fig, key: str, col_filtro: str, col_datos: str) -> None:
-    """
-    Renderiza un gráfico con plotly_events.
-    Al hacer clic en una barra/sector actualiza el cross-filter.
-    """
-    eventos = plotly_events(fig, click_event=True, key=key,
-                            override_height=400, override_width="100%")
-    if eventos:
-        punto = eventos[0]
-        # Barras horizontales: y = categoría; pie: label
-        valor = punto.get("y") or punto.get("label")
-        if valor:
-            if (st.session_state.get("cf_col") == col_filtro and
-                    st.session_state.get("cf_valor") == valor):
-                limpiar_cf()  # segundo clic = deseleccionar
-            else:
-                st.session_state["cf_col"]   = col_filtro
-                st.session_state["cf_valor"] = valor
-            st.rerun()
+# Filtros activos como badges
+filtros_activos = {
+    "Seccional":  sel_seccional,
+    "Semáforo":   sel_semaforo,
+    "SubMenu1":   sel_sub1,
+    "SubMenu2":   sel_sub2,
+    "SubMenu3":   sel_sub3,
+    "Responsable":sel_resp,
+}
+badges = " &nbsp;".join(
+    f'<span style="background:#1e2130;border:1px solid #8f5cda;color:#a78bfa;'
+    f'border-radius:20px;padding:2px 10px;font-size:0.78rem;">🔍 {k}: <b>{v}</b></span>'
+    for k, v in filtros_activos.items() if v != "Todos"
+)
+if badges:
+    st.markdown(badges, unsafe_allow_html=True)
 
 # Aplicar cross-filter al dataframe de gráficos
 df_g = aplicar_cf(df)
-
-# Badge del filtro activo
-badge_cf()
 
 # ── TABLA PRIMERO ──
 st.subheader("📋 Detalle de tickets")
@@ -778,7 +767,7 @@ with col_g1:
     fig_bar = px.bar(df_sec, x="Tickets", y="NombreSeccionales", orientation="h",
                      color="NombreSeccionales", color_discrete_sequence=PALETA, template="plotly_dark")
     fig_bar.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-    grafico_clickeable(fig_bar, "cf_seccional", "NombreSeccionales", "NombreSeccionales")
+    st.plotly_chart(fig_bar, use_container_width=True)
 
 with col_g2:
     st.subheader("🚦 Semáforo")
@@ -788,7 +777,7 @@ with col_g2:
                      color="Estado", color_discrete_map={"🟢 En tiempo":"#4ade80","🟡 En riesgo":"#facc15","🔴 Vencido":"#f87171"})
     fig_pie.update_layout(**{**LAYOUT, "legend": dict(orientation="h", y=-0.15, bgcolor="rgba(0,0,0,0)", font_color="#d1d5db")})
     fig_pie.update_traces(textinfo="percent+label", textfont_size=12)
-    grafico_clickeable(fig_pie, "cf_semaforo", "Semaforo_KPI", "Semaforo_KPI")
+    st.plotly_chart(fig_pie, use_container_width=True)
 
 # ── FILA 2: Tendencia + Treemap (sin cross-filter — son informativos) ──
 col_g3, col_g4 = st.columns(2)
@@ -824,7 +813,7 @@ if "SubMenu1" in df_g.columns:
     fig_sub = px.bar(df_sub, x="Tickets", y="SubMenu1", orientation="h",
                      color="SubMenu1", color_discrete_sequence=PALETA, template="plotly_dark")
     fig_sub.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-    grafico_clickeable(fig_sub, "cf_submenu1", "SubMenu1", "SubMenu1")
+    st.plotly_chart(fig_sub, use_container_width=True)
 else:
     st.info("Columna SubMenu1 no disponible.")
 
@@ -838,7 +827,7 @@ with col_g5:
         fig_sub2 = px.bar(df_sub2, x="Tickets", y="SubMenu2", orientation="h",
                           color="SubMenu2", color_discrete_sequence=PALETA, template="plotly_dark")
         fig_sub2.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-        grafico_clickeable(fig_sub2, "cf_submenu2", "SubMenu2", "SubMenu2")
+        st.plotly_chart(fig_sub2, use_container_width=True)
     else:
         st.info("Columna SubMenu2 no disponible o sin datos.")
 
@@ -850,7 +839,7 @@ with col_g6:
         fig_sub3 = px.bar(df_sub3, x="Tickets", y="SubMenu3", orientation="h",
                           color="SubMenu3", color_discrete_sequence=PALETA, template="plotly_dark")
         fig_sub3.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-        grafico_clickeable(fig_sub3, "cf_submenu3", "SubMenu3", "SubMenu3")
+        st.plotly_chart(fig_sub3, use_container_width=True)
     else:
         st.info("Columna SubMenu3 no disponible o sin datos.")
 
@@ -865,7 +854,7 @@ with col_g7:
         fig_resp = px.bar(df_resp, x="Tickets", y="Responsable", orientation="h",
                           color="Responsable", color_discrete_sequence=PALETA, template="plotly_dark")
         fig_resp.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-        grafico_clickeable(fig_resp, "cf_responsable", "Responsable", "Responsable")
+        st.plotly_chart(fig_resp, use_container_width=True)
 
 with col_g8:
     st.subheader("⏱️ Tiempo Promedio de Cierre por Responsable")
