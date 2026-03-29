@@ -905,7 +905,7 @@ if dashboard == "🔧 Gestionar":
         "Sin SISFV Instalada",
         "Restricciones Acceso",
         "Usuario Ausente",
-        "Traslados No Autorizado",
+        "Traslado no autorizado",
         "Suspension del servicio",
         "Reconexion del servicio",
         "SISFV Funcional",
