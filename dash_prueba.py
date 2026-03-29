@@ -159,29 +159,102 @@ RESPONSABLES_VALIDOS_GLOBAL = [
     "DIANA - GERALDIN - JURIDICO",
     "GERALDIN - JURIDICO",
     "GERALDIN - SUI",
+    "NO SE ESCALA",
 ]
 
+# Mapa exacto SubMenu2 → Responsable según tabla oficial
+# Fuente: tabla de peticiones y responsables de Dispower
+MAPA_SUBMENU2_RESPONSABLE = {
+    # PETICIONES — Consulta de Información
+    "Información del contrato":                                        "JURIDICO - JAVIER PRADA",
+    "Acuerdos iniciales":                                              "JURIDICO - JAVIER PRADA",
+    # PETICIONES — Solicitud de Factura y/o Comprobante
+    "Copia de Factura":                                                "NO SE ESCALA",
+    "Copia de comprobante de pago":                                    "GERALDIN",
+    "Solicitud estado de cartera":                                     "GERALDIN",
+    # PETICIONES — otras
+    "Cambio de Titularidad":                                           "JAVIER PRADA - GERALDIN",
+    "Solicitud de Traslado":                                           "JAVIER PRADA - GERALDIN",
+    "Ausencia de Equipos":                                             "GESTORES SOCIALES",
+    "Solicitud de Desistimiento":                                      "JAVIER PRADA - GERALDIN",
+    # QUEJA — Atención deficiente
+    "Quejas administrativas":                                          "JURIDICO",
+    "Interrupciones en la prestación del servicio":                    "DIANA - JUAN SEBASTIAN",
+    "No tanción de condiciones de seguridad o riesgo":                 "DIANA - JUAN SEBASTIAN",
+    "Terminación del contrato":                                        "JURIDICO",
+    "Suspensión o corte del servicio sin previo aviso o sin causa aparente": "DIANA - GERALDIN",
+    "Afectación ambiental":                                            "JURIDICO",
+    "Estado de la infraestructura":                                    "DIANA - JUAN SEBASTIAN",
+    "Fallas en la coexión del servicio":                               "DIANA - JUAN SEBASTIAN",
+    "No conexión del servicio":                                        "JURIDICO",
+    # QUEJA — Inconformidad con facturación
+    "Cobros inoportunos":                                              "DIANA - GERALDIN",
+    "Cobro por servicios no prestados":                                "GERALDIN",
+    "Datos generales incorrectos":                                     "JAVIER PRADA",
+    "Cobro multiple y/o acumulado":                                    "GERALDIN",
+    "Entrega inoportuna o no entrega de la factura":                   "VANESSA",
+    "Cobro por conexión, reconexión, reinstalación":                   "DIANA - GERALDIN",
+    "Cobro de cargos relacionados a cartera y/o acuerdos de pago":     "GERALDIN - SAC",
+    "Subsidios y contribuciones":                                      "SUI",
+    "Descuento por predio desocupado":                                 "DIANA - GERALDIN - JURIDICO",
+    "Incumplimiento o negatición del acuerdo de suspensión del servicio": "GERALDIN - JURIDICO",
+    "Estrato incorrecto":                                              "JAVIER PRADA",
+    "Clase de uso incorrecto (comercial, industrail, oficial, otros)": "JAVIER PRADA",
+    "Tarifa incorrecta":                                               "GERALDIN - SUI",
+    "Cobros por promedio":                                             "GERALDIN - SUI",
+    "Suscriptor que efectua el pago pero este no es aplicado por la empresa en la facturacion": "GERALDIN",
+    "Inconformidad por la normalización del servicio":                 "DIANA - GERALDIN",
+    "Negación de la solicitud de suspensión":                          "JURIDICO",
+    # RECLAMO
+    "Daño":                                                            "DIANA - JUAN SEBASTIAN",
+    # Gestión de Cartera / Llamada / Traslado
+    "GESTION DE CARTERA":                                              "NO SE ESCALA",
+    "LLAMADA DE INFORMACION":                                          "NO SE ESCALA",
+    "TRASLADO NO AUTORIZADO":                                          "GESTORES SOCIALES",
+    # RESULTADO OPERATIVO
+    "Reposición":                                                      "DIANA - JUAN SEBASTIAN",
+    "Sin SISFV Instalada":                                             "GESTORES SOCIALES",
+    "Restricciones Acceso":                                            "GESTORES SOCIALES",
+    "Usuario Ausente":                                                 "GESTORES SOCIALES",
+    "Suspension del servicio":                                         "DIANA - JUAN SEBASTIAN",
+    "Reconexion del servicio":                                         "DIANA - JUAN SEBASTIAN",
+    "SISFV Abandonado":                                                "GESTORES SOCIALES",
+    "SISFV Funcional":                                                 "GERALDIN - SAC",
+    "Ausencia de Partes":                                              "GESTORES SOCIALES",
+    "Equipos modificados":                                             "DIANA - JUAN SEBASTIAN",
+}
+
 def _normalizar_col_responsable(df: pd.DataFrame) -> pd.DataFrame:
-    """Normaliza la columna Responsable al valor válido más cercano."""
+    """
+    Asigna el Responsable correcto según la tabla oficial:
+    1. Si SubMenu2 tiene un mapeo exacto → usa ese responsable
+    2. Si no, intenta similitud con la lista de válidos
+    3. Si no hay match → conserva el valor original
+    """
     import difflib
     validos_upper = [r.upper() for r in RESPONSABLES_VALIDOS_GLOBAL]
+    mapa_upper    = {k.upper(): v for k, v in MAPA_SUBMENU2_RESPONSABLE.items()}
 
-    def _match(valor):
-        if pd.isna(valor) or str(valor).strip() == "":
+    def _match_responsable(row):
+        # Prioridad 1: mapeo por SubMenu2
+        sub2 = str(row.get("SubMenu2", "") or "").strip().upper()
+        if sub2 and sub2 in mapa_upper:
+            return mapa_upper[sub2]
+        # Prioridad 2: similitud con lista válida
+        valor = str(row.get("Responsable", "") or "").strip()
+        if not valor:
             return valor
-        v = str(valor).strip().upper()
-        # Exacto
+        v = valor.upper()
         if v in validos_upper:
             return RESPONSABLES_VALIDOS_GLOBAL[validos_upper.index(v)]
-        # Similitud
         matches = difflib.get_close_matches(v, validos_upper, n=1, cutoff=0.4)
         if matches:
             return RESPONSABLES_VALIDOS_GLOBAL[validos_upper.index(matches[0])]
-        return valor  # sin match, conservar original
+        return valor
 
     if "Responsable" in df.columns:
         df = df.copy()
-        df["Responsable"] = df["Responsable"].apply(_match)
+        df["Responsable"] = df.apply(_match_responsable, axis=1)
     return df
 
 
