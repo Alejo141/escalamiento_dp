@@ -342,6 +342,11 @@ def guardar_datos(df_abiertos: pd.DataFrame, df_cerrados: pd.DataFrame) -> None:
         data=buf_out.read(),
         timeout=60,
     )
+    if resp_put.status_code == 423:
+        raise Exception(
+            "El archivo está abierto en Excel o en el navegador. "
+            "Ciérralo completamente, espera 30 segundos y vuelve a intentarlo."
+        )
     resp_put.raise_for_status()
 
 # ─────────────────────────────────────────────
@@ -909,21 +914,40 @@ if dashboard == "🔧 Gestionar":
         "Equipos modificados",
     ]
 
+    # Opciones dinámicas para SubMenu2 y SubMenu3 desde el Excel
+    opts_sub2 = sorted(df_abiertos["SubMenu2"].dropna().unique().tolist()) if "SubMenu2" in df_abiertos.columns else []
+    opts_sub3 = sorted(df_abiertos["SubMenu3"].dropna().unique().tolist()) if "SubMenu3" in df_abiertos.columns else []
+
     with st.form("form_edicion"):
         # Campos de solo lectura (informativos)
         col1, col2 = st.columns(2)
         col1.text_input("NUI",      registro.get("NUI", ""),           disabled=True)
         col2.text_input("Semáforo", str(registro.get("Semaforo", "")), disabled=True)
 
-        # Responsable: lista desplegable con los existentes en Consolidado
+        # Responsable
         responsable_actual = registro.get("Responsable", "")
         idx_resp = responsables_lista.index(responsable_actual) if responsable_actual in responsables_lista else 0
         nuevo_responsable = st.selectbox("Responsable", responsables_lista, index=idx_resp)
 
-        # SubMenu1: lista fija de opciones
+        # SubMenu1: lista fija
         submenu_actual = str(registro.get("SubMenu1", ""))
         idx_sub = OPCIONES_SUBMENU1.index(submenu_actual) if submenu_actual in OPCIONES_SUBMENU1 else 0
         nuevo_submenu1 = st.selectbox("SubMenu1", OPCIONES_SUBMENU1, index=idx_sub)
+
+        # SubMenu2: opciones dinámicas del Excel
+        col_s2, col_s3 = st.columns(2)
+        sub2_actual = str(registro.get("SubMenu2", "") or "")
+        idx_sub2    = opts_sub2.index(sub2_actual) if sub2_actual in opts_sub2 else 0
+        nuevo_submenu2 = col_s2.selectbox(
+            "SubMenu2", opts_sub2, index=idx_sub2
+        ) if opts_sub2 else col_s2.text_input("SubMenu2", sub2_actual)
+
+        # SubMenu3: opciones dinámicas del Excel
+        sub3_actual = str(registro.get("SubMenu3", "") or "")
+        idx_sub3    = opts_sub3.index(sub3_actual) if sub3_actual in opts_sub3 else 0
+        nuevo_submenu3 = col_s3.selectbox(
+            "SubMenu3", opts_sub3, index=idx_sub3
+        ) if opts_sub3 else col_s3.text_input("SubMenu3", sub3_actual)
 
         # Descripción editable
         nueva_descripcion = st.text_area("Descripción", registro.get("Descripción", ""), height=120)
@@ -935,14 +959,17 @@ if dashboard == "🔧 Gestionar":
     if guardar:
         usuario_log = st.session_state.get("usuario", "desconocido")
         nui_log     = str(registro.get("NUI", ""))
-        # Registrar cambios campo por campo
         cambios = {
             "Responsable": (registro.get("Responsable", ""), nuevo_responsable),
             "SubMenu1":    (registro.get("SubMenu1", ""),    nuevo_submenu1),
+            "SubMenu2":    (registro.get("SubMenu2", ""),    nuevo_submenu2),
+            "SubMenu3":    (registro.get("SubMenu3", ""),    nuevo_submenu3),
             "Descripción": (registro.get("Descripción", ""), nueva_descripcion),
         }
         df_abiertos.loc[index_sel, "Responsable"] = nuevo_responsable
         df_abiertos.loc[index_sel, "SubMenu1"]    = nuevo_submenu1
+        df_abiertos.loc[index_sel, "SubMenu2"]    = nuevo_submenu2
+        df_abiertos.loc[index_sel, "SubMenu3"]    = nuevo_submenu3
         df_abiertos.loc[index_sel, "Descripción"] = nueva_descripcion
         try:
             with st.spinner("Guardando en OneDrive…"):
