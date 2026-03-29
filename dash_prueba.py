@@ -45,7 +45,7 @@ PALETA = [
 # Columnas visibles en las tablas del dashboard (en orden)
 COLUMNAS_TABLA = [
     "NUI", "NombreSeccionales", "Id_Tickets", "Semaforo",
-    "Menu", "SubMenu1", "FechaCreacion", "Dias_Habiles",
+    "Menu", "SubMenu1", "SubMenu2", "SubMenu3", "FechaCreacion", "Dias_Habiles",
     "Creador_gestion", "Responsable", "Fecha Asignación",
     "Descripción", "Fecha Respuesta",
 ]
