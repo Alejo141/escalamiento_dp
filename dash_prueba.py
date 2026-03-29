@@ -726,32 +726,6 @@ with col_g2:
     fig_pie.update_traces(textinfo="percent+label", textfont_size=12)
     st.plotly_chart(fig_pie, use_container_width=True)
 
-# ── FILA 2: Tendencia + Treemap ──
-col_g3, col_g4 = st.columns(2)
-with col_g3:
-    st.subheader("📈 Tendencia de creación")
-    if df["FechaCreacion"].notna().any():
-        df_trend = (df.dropna(subset=["FechaCreacion"])
-                      .assign(Mes=lambda x: x["FechaCreacion"].dt.to_period("M").astype(str))
-                      .groupby("Mes").size().reset_index(name="Tickets"))
-        fig_line = px.line(df_trend, x="Mes", y="Tickets", markers=True,
-                           template="plotly_dark", color_discrete_sequence=["#a78bfa"])
-        fig_line.update_layout(**LAYOUT)
-        fig_line.update_traces(line_width=2.5, marker_size=7, line_color="#a78bfa",
-                               marker=dict(color="#f472b6", size=8))
-        st.plotly_chart(fig_line, use_container_width=True)
-    else:
-        st.info("Sin datos de fecha disponibles.")
-
-with col_g4:
-    st.subheader("🗺️ Cobertura Seccional × Responsable")
-    df_tree = df.groupby(["NombreSeccionales", "Responsable"]).size().reset_index(name="Tickets")
-    fig_tree = px.treemap(df_tree, path=["NombreSeccionales", "Responsable"], values="Tickets",
-                          color="Tickets", color_continuous_scale=["#3a81d5", "#8f5cda", "#f472b6"],
-                          template="plotly_dark")
-    fig_tree.update_layout(**LAYOUT)
-    st.plotly_chart(fig_tree, use_container_width=True)
-
 # ── FILA 3: SubMenu1 — ancho completo ──
 st.subheader("⚡ Tickets por Categoría")
 if "SubMenu1" in df.columns:
@@ -814,3 +788,29 @@ with col_g8:
                             labels={"Dias para Cierre": "Días promedio"})
         fig_cierre.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
         st.plotly_chart(fig_cierre, use_container_width=True)
+
+# ── FILA 2: Tendencia + Treemap ──
+col_g3, col_g4 = st.columns(2)
+with col_g3:
+    st.subheader("📈 Tendencia de creación")
+    if df["FechaCreacion"].notna().any():
+        df_trend = (df.dropna(subset=["FechaCreacion"])
+                      .assign(Mes=lambda x: x["FechaCreacion"].dt.to_period("M").astype(str))
+                      .groupby("Mes").size().reset_index(name="Tickets"))
+        fig_line = px.line(df_trend, x="Mes", y="Tickets", markers=True,
+                           template="plotly_dark", color_discrete_sequence=["#a78bfa"])
+        fig_line.update_layout(**LAYOUT)
+        fig_line.update_traces(line_width=2.5, marker_size=7, line_color="#a78bfa",
+                               marker=dict(color="#f472b6", size=8))
+        st.plotly_chart(fig_line, use_container_width=True)
+    else:
+        st.info("Sin datos de fecha disponibles.")
+
+with col_g4:
+    st.subheader("🗺️ Cobertura Seccional × Responsable")
+    df_tree = df.groupby(["NombreSeccionales", "Responsable"]).size().reset_index(name="Tickets")
+    fig_tree = px.treemap(df_tree, path=["NombreSeccionales", "Responsable"], values="Tickets",
+                          color="Tickets", color_continuous_scale=["#3a81d5", "#8f5cda", "#f472b6"],
+                          template="plotly_dark")
+    fig_tree.update_layout(**LAYOUT)
+    st.plotly_chart(fig_tree, use_container_width=True)
