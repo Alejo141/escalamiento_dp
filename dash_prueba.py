@@ -12,6 +12,7 @@ import requests
 from io import BytesIO
 from datetime import datetime
 import numpy as np
+from streamlit_plotly_events import plotly_events
 
 # ─────────────────────────────────────────────
 # CONFIGURACIÓN GENERAL
@@ -670,7 +671,7 @@ st.divider()
 # ── TABLA PRIMERO ──
 st.subheader("📋 Detalle de tickets")
 busqueda_top = st.text_input("🔍 Búsqueda rápida", "", key="busqueda_top")
-df_tabla_top = df.copy()
+df_tabla_top = aplicar_cf(df).copy()
 if busqueda_top:
     mask = df_tabla_top.astype(str).apply(lambda col: col.str.contains(busqueda_top, case=False)).any(axis=1)
     df_tabla_top = df_tabla_top[mask]
@@ -706,32 +707,96 @@ LAYOUT = dict(plot_bgcolor="#161a24", paper_bgcolor="#161a24", margin=dict(l=0,r
               legend=dict(bgcolor="rgba(0,0,0,0)", font_color="#d1d5db"),
               font=dict(color="#d1d5db"))
 
+# ─────────────────────────────────────────────
+# CROSS-FILTER — estado en session_state
+# ─────────────────────────────────────────────
+
+if "cf_col" not in st.session_state:
+    st.session_state["cf_col"]   = None  # columna activa del filtro
+    st.session_state["cf_valor"] = None  # valor seleccionado
+
+def aplicar_cf(df_in: pd.DataFrame) -> pd.DataFrame:
+    """Aplica el filtro de cross-filter si hay uno activo."""
+    col   = st.session_state.get("cf_col")
+    valor = st.session_state.get("cf_valor")
+    if col and valor and col in df_in.columns:
+        return df_in[df_in[col].astype(str) == str(valor)]
+    return df_in
+
+def limpiar_cf():
+    st.session_state["cf_col"]   = None
+    st.session_state["cf_valor"] = None
+
+def badge_cf():
+    """Muestra badge del filtro activo con botón para limpiar."""
+    col   = st.session_state.get("cf_col")
+    valor = st.session_state.get("cf_valor")
+    if col and valor:
+        c1, c2 = st.columns([6, 1])
+        with c1:
+            st.markdown(
+                f'<div style="background:#1e2130;border:1px solid #8f5cda;color:#a78bfa;'
+                f'border-radius:20px;padding:4px 14px;font-size:0.82rem;display:inline-block;">'
+                f'🔍 Filtro activo: <b>{col}</b> = <b>{valor}</b></div>',
+                unsafe_allow_html=True,
+            )
+        with c2:
+            if st.button("✕ Quitar", key="btn_limpiar_cf", use_container_width=True):
+                limpiar_cf()
+                st.rerun()
+
+def grafico_clickeable(fig, key: str, col_filtro: str, col_datos: str) -> None:
+    """
+    Renderiza un gráfico con plotly_events.
+    Al hacer clic en una barra/sector actualiza el cross-filter.
+    """
+    eventos = plotly_events(fig, click_event=True, key=key,
+                            override_height=400, override_width="100%")
+    if eventos:
+        punto = eventos[0]
+        # Barras horizontales: y = categoría; pie: label
+        valor = punto.get("y") or punto.get("label")
+        if valor:
+            if (st.session_state.get("cf_col") == col_filtro and
+                    st.session_state.get("cf_valor") == valor):
+                limpiar_cf()  # segundo clic = deseleccionar
+            else:
+                st.session_state["cf_col"]   = col_filtro
+                st.session_state["cf_valor"] = valor
+            st.rerun()
+
+# Aplicar cross-filter al dataframe de gráficos
+df_g = aplicar_cf(df)
+
+# Badge del filtro activo
+badge_cf()
+
 # ── FILA 1: Seccional + Semáforo ──
 col_g1, col_g2 = st.columns([2, 1])
 with col_g1:
     st.subheader("📊 Tickets por Seccional")
-    df_sec = df.groupby("NombreSeccionales").size().reset_index(name="Tickets").sort_values("Tickets", ascending=True)
+    df_sec = df_g.groupby("NombreSeccionales").size().reset_index(name="Tickets").sort_values("Tickets", ascending=True)
     fig_bar = px.bar(df_sec, x="Tickets", y="NombreSeccionales", orientation="h",
                      color="NombreSeccionales", color_discrete_sequence=PALETA, template="plotly_dark")
     fig_bar.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-    st.plotly_chart(fig_bar, use_container_width=True)
+    grafico_clickeable(fig_bar, "cf_seccional", "NombreSeccionales", "NombreSeccionales")
 
 with col_g2:
     st.subheader("🚦 Semáforo")
-    df_sem = df["Semaforo_KPI"].value_counts().reset_index()
+    df_sem = df_g["Semaforo_KPI"].value_counts().reset_index()
     df_sem.columns = ["Estado","Cantidad"]
     fig_pie = px.pie(df_sem, names="Estado", values="Cantidad", hole=0.55, template="plotly_dark",
                      color="Estado", color_discrete_map={"🟢 En tiempo":"#4ade80","🟡 En riesgo":"#facc15","🔴 Vencido":"#f87171"})
     fig_pie.update_layout(**{**LAYOUT, "legend": dict(orientation="h", y=-0.15, bgcolor="rgba(0,0,0,0)", font_color="#d1d5db")})
     fig_pie.update_traces(textinfo="percent+label", textfont_size=12)
-    st.plotly_chart(fig_pie, use_container_width=True)
+    grafico_clickeable(fig_pie, "cf_semaforo", "Semaforo_KPI", "Semaforo_KPI")
 
-# ── FILA 2: Tendencia + Treemap ──
+# ── FILA 2: Tendencia + Treemap (sin cross-filter — son informativos) ──
 col_g3, col_g4 = st.columns(2)
 with col_g3:
     st.subheader("📅 Tendencia de creación")
-    if df["FechaCreacion"].notna().any():
-        df_trend = (df.dropna(subset=["FechaCreacion"])
+    if df_g["FechaCreacion"].notna().any():
+        df_trend = (df_g.dropna(subset=["FechaCreacion"])
                       .assign(Mes=lambda x: x["FechaCreacion"].dt.to_period("M").astype(str))
                       .groupby("Mes").size().reset_index(name="Tickets"))
         fig_line = px.line(df_trend, x="Mes", y="Tickets", markers=True,
@@ -745,7 +810,7 @@ with col_g3:
 
 with col_g4:
     st.subheader("🗺️ Treemap Seccional × Responsable")
-    df_tree = df.groupby(["NombreSeccionales","Responsable"]).size().reset_index(name="Tickets")
+    df_tree = df_g.groupby(["NombreSeccionales","Responsable"]).size().reset_index(name="Tickets")
     fig_tree = px.treemap(df_tree, path=["NombreSeccionales","Responsable"], values="Tickets",
                           color="Tickets", color_continuous_scale=["#3a81d5","#8f5cda","#f472b6"],
                           template="plotly_dark")
@@ -754,59 +819,59 @@ with col_g4:
 
 # ── FILA 3: SubMenu1 — ancho completo ──
 st.subheader("🏷️ Tickets por SubMenu1")
-if "SubMenu1" in df.columns:
-    df_sub = (df.groupby("SubMenu1").size().reset_index(name="Tickets")
+if "SubMenu1" in df_g.columns:
+    df_sub = (df_g.groupby("SubMenu1").size().reset_index(name="Tickets")
                 .sort_values("Tickets", ascending=True))
     fig_sub = px.bar(df_sub, x="Tickets", y="SubMenu1", orientation="h",
                      color="SubMenu1", color_discrete_sequence=PALETA, template="plotly_dark")
     fig_sub.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-    st.plotly_chart(fig_sub, use_container_width=True)
+    grafico_clickeable(fig_sub, "cf_submenu1", "SubMenu1", "SubMenu1")
 else:
     st.info("Columna SubMenu1 no disponible.")
 
-# ── FILA 4: SubMenu2 (izquierda) + SubMenu3 (derecha) ──
+# ── FILA 4: SubMenu2 + SubMenu3 ──
 col_g5, col_g6 = st.columns(2)
 with col_g5:
     st.subheader("🏷️ Tickets por SubMenu2")
-    if "SubMenu2" in df.columns and df["SubMenu2"].notna().any():
-        df_sub2 = (df.groupby("SubMenu2").size().reset_index(name="Tickets")
+    if "SubMenu2" in df_g.columns and df_g["SubMenu2"].notna().any():
+        df_sub2 = (df_g.groupby("SubMenu2").size().reset_index(name="Tickets")
                      .sort_values("Tickets", ascending=True))
         fig_sub2 = px.bar(df_sub2, x="Tickets", y="SubMenu2", orientation="h",
                           color="SubMenu2", color_discrete_sequence=PALETA, template="plotly_dark")
         fig_sub2.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-        st.plotly_chart(fig_sub2, use_container_width=True)
+        grafico_clickeable(fig_sub2, "cf_submenu2", "SubMenu2", "SubMenu2")
     else:
         st.info("Columna SubMenu2 no disponible o sin datos.")
 
 with col_g6:
     st.subheader("🏷️ Tickets por SubMenu3")
-    if "SubMenu3" in df.columns and df["SubMenu3"].notna().any():
-        df_sub3 = (df.groupby("SubMenu3").size().reset_index(name="Tickets")
+    if "SubMenu3" in df_g.columns and df_g["SubMenu3"].notna().any():
+        df_sub3 = (df_g.groupby("SubMenu3").size().reset_index(name="Tickets")
                      .sort_values("Tickets", ascending=True))
         fig_sub3 = px.bar(df_sub3, x="Tickets", y="SubMenu3", orientation="h",
                           color="SubMenu3", color_discrete_sequence=PALETA, template="plotly_dark")
         fig_sub3.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-        st.plotly_chart(fig_sub3, use_container_width=True)
+        grafico_clickeable(fig_sub3, "cf_submenu3", "SubMenu3", "SubMenu3")
     else:
         st.info("Columna SubMenu3 no disponible o sin datos.")
 
-# ── FILA 5: Top 10 Responsables (izquierda) + Tiempo promedio cierre (derecha) ──
+# ── FILA 5: Top 10 Responsables + Tiempo promedio cierre ──
 col_g7, col_g8 = st.columns(2)
 with col_g7:
     st.subheader("🏆 Top 10 Responsables con más Tickets")
-    if "Responsable" in df.columns:
-        df_resp = (df.groupby("Responsable").size().reset_index(name="Tickets")
+    if "Responsable" in df_g.columns:
+        df_resp = (df_g.groupby("Responsable").size().reset_index(name="Tickets")
                      .sort_values("Tickets", ascending=False).head(10)
                      .sort_values("Tickets", ascending=True))
         fig_resp = px.bar(df_resp, x="Tickets", y="Responsable", orientation="h",
                           color="Responsable", color_discrete_sequence=PALETA, template="plotly_dark")
         fig_resp.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-        st.plotly_chart(fig_resp, use_container_width=True)
+        grafico_clickeable(fig_resp, "cf_responsable", "Responsable", "Responsable")
 
 with col_g8:
     st.subheader("⏱️ Tiempo Promedio de Cierre por Responsable")
-    if "Responsable" in df.columns and df["Dias_Habiles"].notna().any():
-        df_cierre = (df.groupby("Responsable")["Dias_Habiles"].mean().reset_index()
+    if "Responsable" in df_g.columns and df_g["Dias_Habiles"].notna().any():
+        df_cierre = (df_g.groupby("Responsable")["Dias_Habiles"].mean().reset_index()
                        .rename(columns={"Dias_Habiles":"Dias para Cierre"})
                        .sort_values("Dias para Cierre", ascending=True))
         fig_cierre = px.bar(df_cierre, x="Dias para Cierre", y="Responsable", orientation="h",
