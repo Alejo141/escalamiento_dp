@@ -13,6 +13,14 @@ from io import BytesIO
 from datetime import datetime
 import numpy as np
 
+# PDF
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import cm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage, HRFlowable
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+
 # ─────────────────────────────────────────────
 # CONFIGURACIÓN GENERAL
 # ─────────────────────────────────────────────
@@ -398,6 +406,160 @@ def a_excel(df: pd.DataFrame) -> bytes:
     return buf.getvalue()
 
 
+def generar_pdf(
+    titulo: str,
+    kpis: dict,
+    filtros_activos: dict,
+    figs: list,          # lista de (nombre, fig plotly)
+    df_tabla: pd.DataFrame,
+) -> bytes:
+    """
+    Genera un reporte PDF con:
+    - Encabezado con título, fecha y filtros activos
+    - Tarjetas de KPIs
+    - Gráficas exportadas como imágenes
+    - Tabla resumen (primeras 50 filas)
+    """
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=landscape(A4),
+        leftMargin=1.5*cm, rightMargin=1.5*cm,
+        topMargin=1.5*cm, bottomMargin=1.5*cm,
+        title=titulo,
+    )
+
+    # ── Estilos ──
+    estilos = getSampleStyleSheet()
+    st_titulo = ParagraphStyle("Titulo", parent=estilos["Title"],
+                                fontSize=18, textColor=colors.HexColor("#8f5cda"),
+                                spaceAfter=6, alignment=TA_LEFT)
+    st_sub    = ParagraphStyle("Sub", parent=estilos["Heading2"],
+                                fontSize=11, textColor=colors.HexColor("#3a81d5"),
+                                spaceBefore=12, spaceAfter=4)
+    st_normal = ParagraphStyle("Normal2", parent=estilos["Normal"],
+                                fontSize=8, textColor=colors.HexColor("#374151"))
+    st_footer = ParagraphStyle("Footer", parent=estilos["Normal"],
+                                fontSize=7, textColor=colors.HexColor("#9ca3af"),
+                                alignment=TA_RIGHT)
+    st_kpi_val = ParagraphStyle("KpiVal", parent=estilos["Normal"],
+                                 fontSize=22, textColor=colors.HexColor("#ffffff"),
+                                 alignment=TA_CENTER, fontName="Helvetica-Bold")
+    st_kpi_lbl = ParagraphStyle("KpiLbl", parent=estilos["Normal"],
+                                 fontSize=7, textColor=colors.HexColor("#9ca3af"),
+                                 alignment=TA_CENTER)
+
+    story = []
+    ancho_pagina = landscape(A4)[0] - 3*cm  # ancho útil
+
+    # ── Encabezado ──
+    story.append(Paragraph(titulo, st_titulo))
+    story.append(Paragraph(
+        f"Generado el {datetime.now().strftime('%d/%m/%Y %H:%M')} | "
+        f"Registros en vista: <b>{len(df_tabla)}</b>",
+        st_normal,
+    ))
+
+    # Filtros activos
+    filtros_str = "  |  ".join(f"{k}: <b>{v}</b>" for k, v in filtros_activos.items() if v)
+    if filtros_str:
+        story.append(Paragraph(f"Filtros activos: {filtros_str}", st_normal))
+
+    story.append(HRFlowable(width="100%", thickness=1,
+                             color=colors.HexColor("#8f5cda"), spaceAfter=10))
+
+    # ── KPIs ──
+    story.append(Paragraph("Indicadores clave", st_sub))
+    col_ancho = ancho_pagina / max(len(kpis), 1)
+    kpi_data = [[
+        Paragraph(str(v), st_kpi_val) for v in kpis.values()
+    ], [
+        Paragraph(k, st_kpi_lbl) for k in kpis.keys()
+    ]]
+    kpi_table = Table(kpi_data, colWidths=[col_ancho] * len(kpis))
+    kpi_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#161a24")),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING",   (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 8),
+        ("LINEAFTER", (0, 0), (-2, -1), 0.5, colors.HexColor("#2a2f3a")),
+        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#8f5cda")),
+        ("ROUNDEDCORNERS", [6]),
+    ]))
+    story.append(kpi_table)
+    story.append(Spacer(1, 14))
+
+    # ── Gráficas ──
+    if figs:
+        story.append(Paragraph("Gráficas", st_sub))
+        # Renderizar en pares (2 por fila)
+        pares = [figs[i:i+2] for i in range(0, len(figs), 2)]
+        img_ancho = (ancho_pagina - 1*cm) / 2
+        img_alto  = img_ancho * 0.55
+
+        for par in pares:
+            fila_imgs = []
+            for nombre, fig in par:
+                try:
+                    img_bytes = fig.to_image(format="png", width=900, height=500,
+                                              scale=1.5, engine="kaleido")
+                    img_buf = BytesIO(img_bytes)
+                    rl_img  = RLImage(img_buf, width=img_ancho, height=img_alto)
+                    fila_imgs.append(rl_img)
+                except Exception:
+                    fila_imgs.append(Paragraph(f"[{nombre}: imagen no disponible]", st_normal))
+
+            if len(fila_imgs) == 1:
+                fila_imgs.append(Spacer(img_ancho, img_alto))
+
+            t = Table([fila_imgs], colWidths=[img_ancho, img_ancho])
+            t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+            story.append(t)
+            story.append(Spacer(1, 6))
+
+    # ── Tabla resumen ──
+    story.append(Paragraph("Detalle de tickets (primeras 50 filas)", st_sub))
+    df_pdf = df_tabla.head(50).copy()
+    # Formatear fechas
+    for c in ["FechaCreacion", "Fecha Asignación", "Fecha Respuesta"]:
+        if c in df_pdf.columns:
+            df_pdf[c] = pd.to_datetime(df_pdf[c], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
+
+    encabezados = list(df_pdf.columns)
+    filas = [encabezados] + df_pdf.fillna("").astype(str).values.tolist()
+
+    col_w = ancho_pagina / max(len(encabezados), 1)
+    tabla = Table(filas, colWidths=[col_w] * len(encabezados), repeatRows=1)
+    tabla.setStyle(TableStyle([
+        ("BACKGROUND",    (0, 0), (-1, 0),  colors.HexColor("#8f5cda")),
+        ("TEXTCOLOR",     (0, 0), (-1, 0),  colors.white),
+        ("FONTNAME",      (0, 0), (-1, 0),  "Helvetica-Bold"),
+        ("FONTSIZE",      (0, 0), (-1, -1), 6),
+        ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.HexColor("#1e2130"), colors.HexColor("#161a24")]),
+        ("TEXTCOLOR",     (0, 1), (-1, -1), colors.HexColor("#d1d5db")),
+        ("ALIGN",         (0, 0), (-1, -1), "LEFT"),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 3),
+        ("TOPPADDING",    (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("GRID",          (0, 0), (-1, -1), 0.3, colors.HexColor("#2a2f3a")),
+    ]))
+    story.append(tabla)
+
+    # ── Pie de página ──
+    story.append(Spacer(1, 12))
+    story.append(HRFlowable(width="100%", thickness=0.5,
+                             color=colors.HexColor("#2a2f3a"), spaceAfter=4))
+    story.append(Paragraph(
+        f"Dashboard SAC — Reporte automático · {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+        st_footer,
+    ))
+
+    doc.build(story)
+    return buf.getvalue()
+
+
 def validar_columnas(df: pd.DataFrame, nombre: str) -> None:
     faltantes = [c for c in COLUMNAS_REQUERIDAS if c not in df.columns]
     if faltantes:
@@ -722,13 +884,104 @@ st.dataframe(
     use_container_width=True, height=380,
 )
 cols_export = [c for c in COLUMNAS_TABLA if c in df_tabla_top.columns]
-st.download_button(
-    label="📥 Exportar tabla a Excel",
-    data=a_excel(df_tabla_top[cols_export]),
-    file_name=f"SAC_export_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    key="export_top",
-)
+
+btn_col1, btn_col2 = st.columns([1, 1])
+
+with btn_col1:
+    st.download_button(
+        label="📥 Exportar tabla a Excel",
+        data=a_excel(df_tabla_top[cols_export]),
+        file_name=f"SAC_export_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key="export_top",
+    )
+
+with btn_col2:
+    # ── Construir figuras para el PDF ──
+    def _build_figs_pdf(df_in):
+        figs_pdf = []
+        L = dict(plot_bgcolor="#161a24", paper_bgcolor="#161a24",
+                 font=dict(color="#d1d5db"), margin=dict(l=40,r=20,t=40,b=40))
+        # Seccional
+        if "NombreSeccionales" in df_in.columns:
+            d = df_in.groupby("NombreSeccionales").size().reset_index(name="Tickets").sort_values("Tickets", ascending=True)
+            f = px.bar(d, x="Tickets", y="NombreSeccionales", orientation="h",
+                       color="NombreSeccionales", color_discrete_sequence=PALETA, template="plotly_dark",
+                       title="Tickets por Seccional")
+            f.update_layout(**L, showlegend=False)
+            figs_pdf.append(("Seccional", f))
+        # Semáforo
+        if "Semaforo_KPI" in df_in.columns:
+            d = df_in["Semaforo_KPI"].value_counts().reset_index()
+            d.columns = ["Estado","Cantidad"]
+            f = px.pie(d, names="Estado", values="Cantidad", hole=0.5,
+                       color="Estado", color_discrete_map={"🟢 En tiempo":"#4ade80","🟡 En riesgo":"#facc15","🔴 Vencido":"#f87171"},
+                       template="plotly_dark", title="Estado del Servicio")
+            f.update_layout(**L)
+            figs_pdf.append(("Semáforo", f))
+        # SubMenu1
+        if "SubMenu1" in df_in.columns:
+            d = df_in.groupby("SubMenu1").size().reset_index(name="Tickets").sort_values("Tickets", ascending=True)
+            f = px.bar(d, x="Tickets", y="SubMenu1", orientation="h",
+                       color="SubMenu1", color_discrete_sequence=PALETA, template="plotly_dark",
+                       title="Tickets por Categoría")
+            f.update_layout(**L, showlegend=False)
+            figs_pdf.append(("SubMenu1", f))
+        # Top 10 Responsables
+        if "Responsable" in df_in.columns:
+            d = df_in.groupby("Responsable").size().reset_index(name="Tickets").sort_values("Tickets",ascending=False).head(10).sort_values("Tickets",ascending=True)
+            f = px.bar(d, x="Tickets", y="Responsable", orientation="h",
+                       color="Responsable", color_discrete_sequence=PALETA, template="plotly_dark",
+                       title="Top 10 Responsables")
+            f.update_layout(**L, showlegend=False)
+            figs_pdf.append(("Top Responsables", f))
+        # Tendencia
+        if "FechaCreacion" in df_in.columns and df_in["FechaCreacion"].notna().any():
+            d = (df_in.dropna(subset=["FechaCreacion"])
+                       .assign(Mes=lambda x: x["FechaCreacion"].dt.to_period("M").astype(str))
+                       .groupby("Mes").size().reset_index(name="Tickets"))
+            f = px.line(d, x="Mes", y="Tickets", markers=True,
+                        template="plotly_dark", color_discrete_sequence=["#a78bfa"],
+                        title="Tendencia de Creación")
+            f.update_layout(**L)
+            figs_pdf.append(("Tendencia", f))
+        return figs_pdf
+
+    # Filtros activos para el encabezado del PDF
+    filtros_pdf = {}
+    if responsables: filtros_pdf["Responsable"] = ", ".join(responsables)
+    if seccionales:  filtros_pdf["Seccional"]   = ", ".join(seccionales)
+    if menus:        filtros_pdf["Menú"]         = ", ".join(menus)
+    if submenus1:    filtros_pdf["SubMenu1"]     = ", ".join(submenus1)
+    if submenus2:    filtros_pdf["SubMenu2"]     = ", ".join(submenus2)
+    if submenus3:    filtros_pdf["SubMenu3"]     = ", ".join(submenus3)
+
+    kpis_pdf = {
+        "Total Tickets": total,
+        "Seccionales":   secciones,
+        "NUIs únicos":   nuis,
+        "Promedio días": prom_dias,
+        "Vencidos":      int(vencidos),
+        "En riesgo":     int(en_riesgo),
+    }
+
+    try:
+        pdf_bytes = generar_pdf(
+            titulo=titulo,
+            kpis=kpis_pdf,
+            filtros_activos=filtros_pdf,
+            figs=_build_figs_pdf(df),
+            df_tabla=df_tabla_top[cols_export],
+        )
+        st.download_button(
+            label="📄 Descargar reporte PDF",
+            data=pdf_bytes,
+            file_name=f"SAC_reporte_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+            mime="application/pdf",
+            key="export_pdf",
+        )
+    except Exception as e:
+        st.warning(f"PDF no disponible: `{e}`")
 
 st.divider()
 
