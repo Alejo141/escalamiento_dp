@@ -613,15 +613,53 @@ es_escalamiento = dashboard == "⚡ Escalamiento"
 df_base = df_abiertos.copy() if es_escalamiento else df_cerrados.copy()
 df_base = aplicar_semaforo(df_base)
 
+# ─────────────────────────────────────────────
+# FILTROS ENCADENADOS — cada filtro muestra solo
+# las opciones disponibles según selecciones previas
+# ─────────────────────────────────────────────
+
+def _opts(df_in: pd.DataFrame, col: str) -> list:
+    """Opciones únicas no nulas de una columna."""
+    if col not in df_in.columns:
+        return []
+    return sorted(df_in[col].dropna().unique().tolist())
+
+# Aplicar filtros secuencialmente para que cada uno
+# restrinja las opciones del siguiente
+df_f = df_base.copy()
+
 with st.sidebar:
-    responsables = st.multiselect("Responsable", sorted(df_base["Responsable"].dropna().unique()))
-    seccionales  = st.multiselect("Seccional",   sorted(df_base["NombreSeccionales"].dropna().unique()))
+    # 1 — Responsable
+    responsables = st.multiselect("Responsable", _opts(df_f, "Responsable"))
+    if responsables:
+        df_f = df_f[df_f["Responsable"].isin(responsables)]
 
-    menus     = st.multiselect("Menú",     sorted(df_base["Menu"].dropna().unique())     if "Menu"     in df_base.columns else [])
-    submenus1 = st.multiselect("SubMenu1", sorted(df_base["SubMenu1"].dropna().unique()) if "SubMenu1" in df_base.columns else [])
-    submenus2 = st.multiselect("SubMenu2", sorted(df_base["SubMenu2"].dropna().unique()) if "SubMenu2" in df_base.columns else [])
-    submenus3 = st.multiselect("SubMenu3", sorted(df_base["SubMenu3"].dropna().unique()) if "SubMenu3" in df_base.columns else [])
+    # 2 — Seccional (opciones restringidas por Responsable)
+    seccionales = st.multiselect("Seccional", _opts(df_f, "NombreSeccionales"))
+    if seccionales:
+        df_f = df_f[df_f["NombreSeccionales"].isin(seccionales)]
 
+    # 3 — Menú (opciones restringidas por anteriores)
+    menus = st.multiselect("Menú", _opts(df_f, "Menu"))
+    if menus:
+        df_f = df_f[df_f["Menu"].isin(menus)]
+
+    # 4 — SubMenu1
+    submenus1 = st.multiselect("SubMenu1", _opts(df_f, "SubMenu1"))
+    if submenus1:
+        df_f = df_f[df_f["SubMenu1"].isin(submenus1)]
+
+    # 5 — SubMenu2
+    submenus2 = st.multiselect("SubMenu2", _opts(df_f, "SubMenu2"))
+    if submenus2:
+        df_f = df_f[df_f["SubMenu2"].isin(submenus2)]
+
+    # 6 — SubMenu3
+    submenus3 = st.multiselect("SubMenu3", _opts(df_f, "SubMenu3"))
+    if submenus3:
+        df_f = df_f[df_f["SubMenu3"].isin(submenus3)]
+
+    # 7 — Rango de fechas
     fecha_min, fecha_max = df_base["FechaCreacion"].min(), df_base["FechaCreacion"].max()
     if pd.notna(fecha_min) and pd.notna(fecha_max) and fecha_min != fecha_max:
         rango_fechas = st.date_input(
@@ -632,19 +670,8 @@ with st.sidebar:
     else:
         rango_fechas = None
 
-df = df_base.copy()
-if responsables:
-    df = df[df["Responsable"].isin(responsables)]
-if seccionales:
-    df = df[df["NombreSeccionales"].isin(seccionales)]
-if menus and "Menu" in df.columns:
-    df = df[df["Menu"].isin(menus)]
-if submenus1 and "SubMenu1" in df.columns:
-    df = df[df["SubMenu1"].isin(submenus1)]
-if submenus2 and "SubMenu2" in df.columns:
-    df = df[df["SubMenu2"].isin(submenus2)]
-if submenus3 and "SubMenu3" in df.columns:
-    df = df[df["SubMenu3"].isin(submenus3)]
+# df final con todos los filtros aplicados
+df = df_f.copy()
 if rango_fechas and len(rango_fechas) == 2:
     df = df[(df["FechaCreacion"].dt.date >= rango_fechas[0]) &
             (df["FechaCreacion"].dt.date <= rango_fechas[1])]
