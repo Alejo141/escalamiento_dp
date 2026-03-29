@@ -752,47 +752,21 @@ with col_g4:
     fig_tree.update_layout(**LAYOUT)
     st.plotly_chart(fig_tree, use_container_width=True)
 
-# ── FILA 3: SubMenu1 + Top 10 Responsables ──
+# ── FILA 3: SubMenu1 — ancho completo ──
+st.subheader("🏷️ Tickets por SubMenu1")
+if "SubMenu1" in df.columns:
+    df_sub = (df.groupby("SubMenu1").size().reset_index(name="Tickets")
+                .sort_values("Tickets", ascending=True))
+    fig_sub = px.bar(df_sub, x="Tickets", y="SubMenu1", orientation="h",
+                     color="SubMenu1", color_discrete_sequence=PALETA, template="plotly_dark")
+    fig_sub.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
+    st.plotly_chart(fig_sub, use_container_width=True)
+else:
+    st.info("Columna SubMenu1 no disponible.")
+
+# ── FILA 4: SubMenu2 (izquierda) + SubMenu3 (derecha) ──
 col_g5, col_g6 = st.columns(2)
 with col_g5:
-    st.subheader("🏷️ Tickets por SubMenu1")
-    if "SubMenu1" in df.columns:
-        df_sub = (df.groupby("SubMenu1").size().reset_index(name="Tickets")
-                    .sort_values("Tickets", ascending=True))
-        fig_sub = px.bar(df_sub, x="Tickets", y="SubMenu1", orientation="h",
-                         color="SubMenu1", color_discrete_sequence=PALETA, template="plotly_dark")
-        fig_sub.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-        st.plotly_chart(fig_sub, use_container_width=True)
-    else:
-        st.info("Columna SubMenu1 no disponible.")
-
-with col_g6:
-    st.subheader("🏆 Top 10 Responsables con más Tickets")
-    if "Responsable" in df.columns:
-        df_resp = (df.groupby("Responsable").size().reset_index(name="Tickets")
-                     .sort_values("Tickets", ascending=False).head(10)
-                     .sort_values("Tickets", ascending=True))
-        fig_resp = px.bar(df_resp, x="Tickets", y="Responsable", orientation="h",
-                          color="Responsable", color_discrete_sequence=PALETA, template="plotly_dark")
-        fig_resp.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-        st.plotly_chart(fig_resp, use_container_width=True)
-
-# ── FILA 4: Tiempo promedio cierre por responsable + Distribución días ──
-# ── FILA 4: Tiempo promedio cierre + SubMenu2 ──
-col_g7, col_g8 = st.columns(2)
-with col_g7:
-    st.subheader("⏱️ Tiempo Promedio de Cierre por Responsable")
-    if "Responsable" in df.columns and df["Dias_Habiles"].notna().any():
-        df_cierre = (df.groupby("Responsable")["Dias_Habiles"].mean().reset_index()
-                       .rename(columns={"Dias_Habiles":"Dias para Cierre"})
-                       .sort_values("Dias para Cierre", ascending=True))
-        fig_cierre = px.bar(df_cierre, x="Dias para Cierre", y="Responsable", orientation="h",
-                            color="Responsable", color_discrete_sequence=PALETA, template="plotly_dark",
-                            labels={"Dias para Cierre":"Días promedio"})
-        fig_cierre.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-        st.plotly_chart(fig_cierre, use_container_width=True)
-
-with col_g8:
     st.subheader("🏷️ Tickets por SubMenu2")
     if "SubMenu2" in df.columns and df["SubMenu2"].notna().any():
         df_sub2 = (df.groupby("SubMenu2").size().reset_index(name="Tickets")
@@ -804,14 +778,39 @@ with col_g8:
     else:
         st.info("Columna SubMenu2 no disponible o sin datos.")
 
-# ── FILA 5: SubMenu3 ──
-st.subheader("🏷️ Tickets por SubMenu3")
-if "SubMenu3" in df.columns and df["SubMenu3"].notna().any():
-    df_sub3 = (df.groupby("SubMenu3").size().reset_index(name="Tickets")
-                 .sort_values("Tickets", ascending=True))
-    fig_sub3 = px.bar(df_sub3, x="Tickets", y="SubMenu3", orientation="h",
-                      color="SubMenu3", color_discrete_sequence=PALETA, template="plotly_dark")
-    fig_sub3.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-    st.plotly_chart(fig_sub3, use_container_width=True)
-else:
-    st.info("Columna SubMenu3 no disponible o sin datos.")
+with col_g6:
+    st.subheader("🏷️ Tickets por SubMenu3")
+    if "SubMenu3" in df.columns and df["SubMenu3"].notna().any():
+        df_sub3 = (df.groupby("SubMenu3").size().reset_index(name="Tickets")
+                     .sort_values("Tickets", ascending=True))
+        fig_sub3 = px.bar(df_sub3, x="Tickets", y="SubMenu3", orientation="h",
+                          color="SubMenu3", color_discrete_sequence=PALETA, template="plotly_dark")
+        fig_sub3.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
+        st.plotly_chart(fig_sub3, use_container_width=True)
+    else:
+        st.info("Columna SubMenu3 no disponible o sin datos.")
+
+# ── FILA 5: Top 10 Responsables (izquierda) + Tiempo promedio cierre (derecha) ──
+col_g7, col_g8 = st.columns(2)
+with col_g7:
+    st.subheader("🏆 Top 10 Responsables con más Tickets")
+    if "Responsable" in df.columns:
+        df_resp = (df.groupby("Responsable").size().reset_index(name="Tickets")
+                     .sort_values("Tickets", ascending=False).head(10)
+                     .sort_values("Tickets", ascending=True))
+        fig_resp = px.bar(df_resp, x="Tickets", y="Responsable", orientation="h",
+                          color="Responsable", color_discrete_sequence=PALETA, template="plotly_dark")
+        fig_resp.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
+        st.plotly_chart(fig_resp, use_container_width=True)
+
+with col_g8:
+    st.subheader("⏱️ Tiempo Promedio de Cierre por Responsable")
+    if "Responsable" in df.columns and df["Dias_Habiles"].notna().any():
+        df_cierre = (df.groupby("Responsable")["Dias_Habiles"].mean().reset_index()
+                       .rename(columns={"Dias_Habiles":"Dias para Cierre"})
+                       .sort_values("Dias para Cierre", ascending=True))
+        fig_cierre = px.bar(df_cierre, x="Dias para Cierre", y="Responsable", orientation="h",
+                            color="Responsable", color_discrete_sequence=PALETA, template="plotly_dark",
+                            labels={"Dias para Cierre":"Días promedio"})
+        fig_cierre.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
+        st.plotly_chart(fig_cierre, use_container_width=True)
