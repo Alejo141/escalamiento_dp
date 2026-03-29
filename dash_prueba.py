@@ -713,23 +713,31 @@ def _extraer_valor(sel, col_y: str = None):
 
 def grafico_cf(fig, key: str, col_filtro: str, es_horizontal: bool = True, height: int = 400):
     """
-    Muestra un gráfico con selección nativa.
-    Al hacer clic en una barra actualiza el cross-filter.
+    Muestra un gráfico con selección nativa on_select.
+    El filtro se guarda en session_state y se aplica en el siguiente rerun.
     """
+    # Leer selección previa del session_state para resaltar
+    valor_activo = st.session_state.get("cf_valor")
+    col_activa   = st.session_state.get("cf_col")
+
     sel = st.plotly_chart(
         fig,
         use_container_width=True,
         on_select="rerun",
         key=key,
     )
+    # Procesar clic — esto corre en el SIGUIENTE rerun tras el clic
     if sel and sel.get("points"):
         valor = _extraer_valor(sel, col_y=col_filtro if es_horizontal else None)
         if valor:
-            if st.session_state.get("cf_col") == col_filtro and st.session_state.get("cf_valor") == str(valor):
-                limpiar_cf()
+            nuevo_valor = str(valor)
+            if col_activa == col_filtro and valor_activo == nuevo_valor:
+                # Segundo clic en mismo valor = deseleccionar
+                st.session_state["cf_col"]   = None
+                st.session_state["cf_valor"] = None
             else:
                 st.session_state["cf_col"]   = col_filtro
-                st.session_state["cf_valor"] = str(valor)
+                st.session_state["cf_valor"] = nuevo_valor
             st.rerun()
 
 # Badge del filtro activo
@@ -755,7 +763,7 @@ df_g = aplicar_cf(df)
 # ── TABLA PRIMERO ──
 st.subheader("📋 Detalle de tickets")
 busqueda_top = st.text_input("🔍 Búsqueda rápida", "", key="busqueda_top")
-df_tabla_top = aplicar_cf(df).copy()
+df_tabla_top = df_g.copy()
 if busqueda_top:
     mask = df_tabla_top.astype(str).apply(lambda col: col.str.contains(busqueda_top, case=False)).any(axis=1)
     df_tabla_top = df_tabla_top[mask]
