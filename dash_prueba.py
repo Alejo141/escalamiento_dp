@@ -299,11 +299,84 @@ def mostrar_login_sidebar() -> None:
 # UTILIDADES
 # ─────────────────────────────────────────────
 
+# Festivos colombianos fijos (Ley 51/1983 + Ley 270/1996)
+# Se actualiza anualmente agregando el año correspondiente
+def _festivos_colombia() -> list:
+    festivos = []
+    for anio in range(2020, 2031):
+        # Festivos fijos
+        fijos = [
+            f"{anio}-01-01",  # Año Nuevo
+            f"{anio}-05-01",  # Día del Trabajo
+            f"{anio}-07-20",  # Independencia
+            f"{anio}-08-07",  # Batalla de Boyacá
+            f"{anio}-12-08",  # Inmaculada Concepción
+            f"{anio}-12-25",  # Navidad
+        ]
+        festivos.extend(fijos)
+
+        # Festivos "Ley Emiliani" — se mueven al lunes siguiente si no caen en lunes
+        def lunes_siguiente(fecha_str):
+            d = pd.Timestamp(fecha_str)
+            if d.weekday() == 0:
+                return d
+            dias = 7 - d.weekday()
+            return d + pd.Timedelta(days=dias)
+
+        emiliani = [
+            f"{anio}-01-06",  # Reyes Magos
+            f"{anio}-03-19",  # San José
+            f"{anio}-06-29",  # San Pedro y San Pablo
+            f"{anio}-08-15",  # Asunción
+            f"{anio}-10-12",  # Día de la Raza
+            f"{anio}-11-01",  # Todos los Santos
+            f"{anio}-11-11",  # Independencia Cartagena
+        ]
+        for f in emiliani:
+            festivos.append(str(lunes_siguiente(f).date()))
+
+        # Semana Santa (Jueves y Viernes Santo) — cálculo algoritmo de Gauss
+        a = anio % 19
+        b = anio // 100
+        c = anio % 100
+        d = b // 4
+        e = b % 4
+        f = (b + 8) // 25
+        g = (b - f + 1) // 3
+        h = (19*a + b - d - g + 15) % 30
+        i = c // 4
+        k = c % 4
+        l = (32 + 2*e + 2*i - h - k) % 7
+        m = (a + 11*h + 22*l) // 451
+        mes  = (h + l - 7*m + 114) // 31
+        dia  = ((h + l - 7*m + 114) % 31) + 1
+        pascua   = pd.Timestamp(year=anio, month=mes, day=dia)
+        jueves   = pascua - pd.Timedelta(days=3)
+        viernes  = pascua - pd.Timedelta(days=2)
+        ascension = lunes_siguiente(str((pascua + pd.Timedelta(days=39)).date()))
+        corpus    = lunes_siguiente(str((pascua + pd.Timedelta(days=60)).date()))
+        sagrado   = lunes_siguiente(str((pascua + pd.Timedelta(days=68)).date()))
+        festivos.extend([
+            str(jueves.date()), str(viernes.date()),
+            str(ascension.date()), str(corpus.date()), str(sagrado.date()),
+        ])
+
+    return [np.datetime64(f, "D") for f in festivos]
+
+FESTIVOS_CO = np.array(_festivos_colombia(), dtype="datetime64[D]")
+
+
 def calcular_dias_habiles(df: pd.DataFrame) -> pd.Series:
+    """Días hábiles entre FechaCreacion y hoy, excluyendo festivos colombianos."""
     hoy    = np.datetime64(pd.Timestamp.today().normalize(), "D")
     fechas = pd.to_datetime(df["FechaCreacion"], errors="coerce").values.astype("datetime64[D]")
     valido = ~pd.isnull(df["FechaCreacion"])
-    return pd.Series(np.where(valido, np.busday_count(fechas, hoy), np.nan), index=df.index)
+    dias   = np.where(
+        valido,
+        np.busday_count(fechas, hoy, holidays=FESTIVOS_CO),
+        np.nan,
+    )
+    return pd.Series(dias, index=df.index)
 
 
 def aplicar_semaforo(df: pd.DataFrame) -> pd.DataFrame:
