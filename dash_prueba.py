@@ -717,7 +717,7 @@ with col_g1:
     fig_bar = px.bar(df_sec, x="Tickets", y="NombreSeccionales", orientation="h",
                      color="NombreSeccionales", color_discrete_sequence=PALETA, template="plotly_dark")
     fig_bar.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-    st.plotly_chart(fig_bar, use_container_width=True)
+    st.plotly_chart(fig_bar, use_container_width=True, key="fig_bar")
 
 with col_g2:
     st.subheader("🚦 Estado del Servicio")
@@ -727,7 +727,7 @@ with col_g2:
                      color="Estado", color_discrete_map={"🟢 En tiempo": "#4ade80", "🟡 En riesgo": "#facc15", "🔴 Vencido": "#f87171"})
     fig_pie.update_layout(**{**LAYOUT, "legend": dict(orientation="h", y=-0.15, bgcolor="rgba(0,0,0,0)", font_color="#d1d5db")})
     fig_pie.update_traces(textinfo="percent+label", textfont_size=12)
-    st.plotly_chart(fig_pie, use_container_width=True)
+    st.plotly_chart(fig_pie, use_container_width=True, key="fig_pie")
 
 # ── FILA 3: SubMenu1 — ancho completo ──
 st.subheader("⚡ Tickets por Categoría")
@@ -737,7 +737,7 @@ if "SubMenu1" in df.columns:
     fig_sub = px.bar(df_sub, x="Tickets", y="SubMenu1", orientation="h",
                      color="SubMenu1", color_discrete_sequence=PALETA, template="plotly_dark")
     fig_sub.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-    st.plotly_chart(fig_sub, use_container_width=True)
+    st.plotly_chart(fig_sub, use_container_width=True, key="fig_sub")
 else:
     st.info("Columna SubMenu1 no disponible.")
 
@@ -751,7 +751,7 @@ with col_g5:
         fig_sub2 = px.bar(df_sub2, x="Tickets", y="SubMenu2", orientation="h",
                           color="SubMenu2", color_discrete_sequence=PALETA, template="plotly_dark")
         fig_sub2.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-        st.plotly_chart(fig_sub2, use_container_width=True)
+        st.plotly_chart(fig_sub2, use_container_width=True, key="fig_sub2")
     else:
         st.info("Columna SubMenu2 no disponible o sin datos.")
 
@@ -763,7 +763,7 @@ with col_g6:
         fig_sub3 = px.bar(df_sub3, x="Tickets", y="SubMenu3", orientation="h",
                           color="SubMenu3", color_discrete_sequence=PALETA, template="plotly_dark")
         fig_sub3.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-        st.plotly_chart(fig_sub3, use_container_width=True)
+        st.plotly_chart(fig_sub3, use_container_width=True, key="fig_sub3")
     else:
         st.info("Columna SubMenu3 no disponible o sin datos.")
 
@@ -778,7 +778,7 @@ with col_g7:
         fig_resp = px.bar(df_resp, x="Tickets", y="Responsable", orientation="h",
                           color="Responsable", color_discrete_sequence=PALETA, template="plotly_dark")
         fig_resp.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-        st.plotly_chart(fig_resp, use_container_width=True)
+        st.plotly_chart(fig_resp, use_container_width=True, key="fig_resp")
 
 with col_g8:
     st.subheader("⏱️ Tiempo Promedio de Atención por Responsable")
@@ -790,7 +790,7 @@ with col_g8:
                             color="Responsable", color_discrete_sequence=PALETA, template="plotly_dark",
                             labels={"Dias para Cierre": "Días promedio"})
         fig_cierre.update_layout(**LAYOUT, showlegend=False, yaxis_title=None)
-        st.plotly_chart(fig_cierre, use_container_width=True)
+        st.plotly_chart(fig_cierre, use_container_width=True, key="fig_cierre")
 
 # ── FILA 2: Tendencia + Treemap ──
 col_g3, col_g4 = st.columns(2)
@@ -805,7 +805,7 @@ with col_g3:
         fig_line.update_layout(**LAYOUT)
         fig_line.update_traces(line_width=2.5, marker_size=7, line_color="#a78bfa",
                                marker=dict(color="#f472b6", size=8))
-        st.plotly_chart(fig_line, use_container_width=True)
+        st.plotly_chart(fig_line, use_container_width=True, key="fig_line")
     else:
         st.info("Sin datos de fecha disponibles.")
 
@@ -816,4 +816,4 @@ with col_g4:
                           color="Tickets", color_continuous_scale=["#3a81d5", "#8f5cda", "#f472b6"],
                           template="plotly_dark")
     fig_tree.update_layout(**LAYOUT)
-    st.plotly_chart(fig_tree, use_container_width=True)
+    st.plotly_chart(fig_tree, use_container_width=True, key="fig_tree")
